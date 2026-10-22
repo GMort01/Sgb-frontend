@@ -1,0 +1,15 @@
+services:
+  frontend-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5173:80"
+    restart: unless-stopped
+    networks:
+      - sgb-network
+
+networks:
+  sgb-network:
+    name: sgb-network
+    external: true

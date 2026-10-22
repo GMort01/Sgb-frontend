@@ -60,7 +60,109 @@ Ejemplo de respuesta:
 
 ## Diagrama de arquitectura
 
-[Ver diagrama de arquitectura en Mermaid](https://mermaid.ai/d/16789ce8-6554-427d-917e-ce4389f31fb5)
+[Abrir el editor Mermaid Live](https://mermaid.live/) · [Ver el diagrama compartido](https://mermaid.ai/d/16789ce8-6554-427d-917e-ce4389f31fb5)
+
+El siguiente diagrama documenta la arquitectura implementada: presentación, proxy HTTP, rutas y controladores, servicios, repositorios, transacciones, tablas SQLite y despliegue Docker. Puedes copiar el código al editor Mermaid Live para visualizarlo o exportarlo.
+
+```mermaid
+flowchart LR
+    subgraph Presentation["Presentación - navegador"]
+        Pages["React pages: Portal, Estudiante, Dashboard, Recursos, Usuarios, Prestamos, Multas, Actividades"]
+        ClientServices["TypeScript services + Axios"]
+        Pages --> ClientServices
+    end
+
+    subgraph Delivery["Entrega y transporte HTTP"]
+        Vite["Desarrollo: Vite proxy /api"]
+        Nginx["Produccion: Nginx proxy /api"]
+        ApiRoutes["Express REST routes /api/*"]
+        ClientServices -->|"HTTP JSON"| Vite
+        ClientServices -->|"HTTP JSON"| Nginx
+        Vite --> ApiRoutes
+        Nginx --> ApiRoutes
+    end
+
+    subgraph Application["Backend - Node.js y Express"]
+        ResourceController["RecursoController"]
+        UserController["UsuarioController"]
+        LoanController["PrestamoController"]
+        FineController["MultaController"]
+        EventController["ActividadController"]
+        ResourceService["RecursoService"]
+        UserService["UsuarioService"]
+        LoanService["PrestamoService"]
+        FineService["MultaService"]
+        EventService["ActividadService"]
+        ApiRoutes --> ResourceController
+        ApiRoutes --> UserController
+        ApiRoutes --> LoanController
+        ApiRoutes --> FineController
+        ApiRoutes --> EventController
+        ResourceController --> ResourceService
+        UserController --> UserService
+        LoanController --> LoanService
+        FineController --> FineService
+        EventController --> EventService
+    end
+
+    subgraph Persistence["Persistencia - repositorios SQLite"]
+        ResourceRepository["RecursoRepository"]
+        UserRepository["UsuarioRepository"]
+        LoanRepository["PrestamoRepository"]
+        FineRepository["MultaRepository"]
+        EventRepository["ActividadRepository"]
+        Transactions["transaction.js: transacciones atomicas"]
+        ResourceService --> ResourceRepository
+        UserService --> UserRepository
+        LoanService --> LoanRepository
+        FineService --> FineRepository
+        EventService --> EventRepository
+        LoanRepository --> Transactions
+        EventRepository --> Transactions
+        ResourceRepository -.->|registros| ResourceService
+        UserRepository -.->|registros| UserService
+        LoanRepository -.->|registros| LoanService
+        FineRepository -.->|registros| FineService
+        EventRepository -.->|registros| EventService
+        ResourceService -.-> ResourceController
+        UserService -.-> UserController
+        LoanService -.-> LoanController
+        FineService -.-> FineController
+        EventService -.-> EventController
+        ResourceController -.-> ApiRoutes
+        UserController -.-> ApiRoutes
+        LoanController -.-> ApiRoutes
+        FineController -.-> ApiRoutes
+        EventController -.-> ApiRoutes
+    end
+
+    subgraph Data["Base de datos SQLite"]
+        DB[("biblioteca.db")]
+        Tables["recursos, usuarios, prestamos, reservas, multas, actividades, inscripciones_actividades"]
+        DB --> Tables
+        ResourceRepository --> DB
+        UserRepository --> DB
+        LoanRepository --> DB
+        FineRepository --> DB
+        EventRepository --> DB
+        Transactions --> DB
+    end
+
+    subgraph Deployment["Despliegue Docker"]
+        FrontendContainer["Contenedor frontend: Vite dev o Nginx produccion"]
+        BackendContainer["Contenedor backend: Node.js / Express"]
+        DataVolume["Volumen persistente backend_data"]
+        FrontendContainer -->|"red Docker: HTTP backend:3000"| BackendContainer
+        BackendContainer --> DataVolume
+        DataVolume --> DB
+    end
+
+    ApiRoutes -.->|"respuesta JSON; p. ej. 200 OK"| ClientServices
+    Vite -.->|"HTML/JS/CSS servido aparte; no por la API"| Pages
+    Nginx -.->|"HTML/JS/CSS servido aparte; no por la API"| Pages
+```
+
+El diagrama representa los componentes y flujos implementados en este proyecto; no pretende enumerar todos los patrones ni contenidos del libro de referencia.
 
 ## Funcionalidades de la demo
 
@@ -107,34 +209,58 @@ Las respuestas correctas de lectura siguen el formato `{ "success": true, "data"
 
 ## Ejecución con Docker Compose
 
-El Compose unificado está en la carpeta contenedora `SGB-Universidad-Madeira`, que debe contener las carpetas `sgb-backend` y `sgb-frontend`. Una vez disponibles ambos directorios, desde la carpeta contenedora ejecuta:
+Clona los dos repositorios dentro de la carpeta contenedora para que queden como directorios hermanos:
 
 ```bash
+mkdir SGB-Universidad-Madeira
+cd SGB-Universidad-Madeira
+git clone https://github.com/GMort01/Sgb-Backend.git sgb-backend
+git clone https://github.com/GMort01/Sgb-Frontend.git sgb-frontend
+```
+
+Los archivos Compose unificados están en el repositorio backend. Desde la carpeta contenedora, entra en `sgb-backend` y levanta el entorno de **producción**:
+
+```bash
+cd sgb-backend
 docker compose up --build
 ```
 
-Este único comando construye y levanta ambos servicios:
+El Compose predeterminado construye y levanta frontend y backend:
 
 - **Backend:** `http://localhost:3000`
 - **Frontend:** `http://localhost:5173`
 
-Para detener los contenedores:
+Para usar el entorno de **desarrollo** en su lugar:
+
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+
+Para detener producción:
 
 ```bash
 docker compose down
 ```
 
-La base de datos SQLite del Compose unificado se guarda en un volumen de Docker para conservar los datos entre reinicios.
+Si iniciaste desarrollo, detén ese perfil con:
 
-### Archivos Docker del frontend
+```bash
+docker compose -f docker-compose.dev.yml down
+```
 
-- `Dockerfile`: imagen de producción del frontend, compilada y servida mediante Nginx.
-- `Dockerfile.dev`: imagen de desarrollo con Vite.
+En producción, Nginx sirve la interfaz y reenvía `/api` al backend por la red interna. En ambos modos, SQLite se conserva en un volumen Docker, el backend dispone de un healthcheck y el frontend espera a que la API esté saludable.
+
+### Archivos Docker
+
+- `sgb-frontend/Dockerfile`: imagen de producción del frontend, compilada y servida mediante Nginx.
+- `sgb-frontend/Dockerfile.dev`: imagen de desarrollo con Vite.
+- `docker-compose.yml` y `docker-compose.dev.yml` en el repositorio backend: configuraciones unificadas para producción y desarrollo, respectivamente.
+- `sgb-frontend/docker-compose.yml` y `sgb-frontend/docker-compose.dev.yml`: ejecución independiente del frontend; se conectan a `sgb-network`, creada por el backend.
 - `vite.config.ts`: servidor de desarrollo y proxy de solicitudes `/api` al backend.
 - `nginx.conf`: configuración del servidor de producción y proxy de la API.
-- `docker-compose.yml` en la carpeta contenedora: configuración unificada de frontend y backend.
+- `docker-compose.backend.yml` y `docker-compose.backend.dev.yml` en el repositorio backend: opciones para ejecutar únicamente la API.
 
-El backend también incluye `docker-compose.yml` y `docker-compose.dev.yml` para levantarlo de forma independiente. El Compose unificado pertenece a la carpeta contenedora, no a cada servicio.
+Los Compose unificados requieren que ambos repositorios estén en carpetas hermanas llamadas `sgb-backend` y `sgb-frontend`. No levantes simultáneamente stacks distintos que publiquen los mismos puertos.
 
 ## Ejecución local del frontend
 
@@ -167,6 +293,8 @@ sgb-frontend/
 │   └── main.tsx         # Punto de entrada de React
 ├── Dockerfile
 ├── Dockerfile.dev
+├── docker-compose.yml
+├── docker-compose.dev.yml
 ├── nginx.conf
 ├── vite.config.ts
 └── README.md

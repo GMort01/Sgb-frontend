@@ -17,8 +17,17 @@ const estadoStyles: Record<NonNullable<Recurso['estado']>, string> = {
   Prestado: 'bg-amber-50 text-amber-700 ring-amber-200',
   Reservado: 'bg-sky-100 text-sky-700 ring-sky-200',
   Perdido: 'bg-rose-50 text-rose-700 ring-rose-200',
+  'Baja administrativa': 'bg-slate-100 text-slate-700 ring-slate-500/20',
   Baja: 'bg-slate-100 text-slate-700 ring-slate-500/20',
 };
+
+const estadosRecurso: NonNullable<Recurso['estado']>[] = [
+  'Disponible',
+  'Prestado',
+  'Reservado',
+  'Perdido',
+  'Baja administrativa',
+];
 
 const estadoInicial = {
   titulo: '',
@@ -59,6 +68,7 @@ export const RecursosPage = () => {
   const [formulario, setFormulario] = useState(estadoInicial);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  const [estadoActualizandoId, setEstadoActualizandoId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorFormulario, setErrorFormulario] = useState<string | null>(null);
 
@@ -116,6 +126,22 @@ export const RecursosPage = () => {
       setErrorFormulario('No se pudo guardar el recurso. Revisa los datos e inténtalo de nuevo.');
     } finally {
       setGuardando(false);
+    }
+  };
+
+  const cambiarEstado = async (recurso: Recurso, estado: NonNullable<Recurso['estado']>) => {
+    if (recurso.id === undefined) return;
+    setEstadoActualizandoId(recurso.id);
+    setError(null);
+    try {
+      const actualizado = await recursoService.actualizarEstado(recurso.id, estado);
+      setRecursos((actuales) => actuales.map((item) => (
+        item.id === actualizado.id ? { ...item, ...actualizado } : item
+      )));
+    } catch {
+      setError('No se pudo actualizar el estado del recurso. Inténtalo de nuevo.');
+    } finally {
+      setEstadoActualizandoId(null);
     }
   };
 
@@ -194,6 +220,7 @@ export const RecursosPage = () => {
             const estado = recurso.estado === 'Disponible' && recurso.coleccion !== 'Mapoteca' && (recurso.ejemplares ?? 0) < 1
               ? 'Prestado'
               : recurso.estado ?? 'Disponible';
+            const estadoLegible = estado === 'Baja' ? 'Baja administrativa' : estado;
             return (
               <article
                 key={recurso.id ?? `${recurso.titulo}-${recurso.coleccion}`}
@@ -204,9 +231,25 @@ export const RecursosPage = () => {
                     <BookOpen size={14} aria-hidden="true" />
                     {recurso.coleccion}
                   </span>
-                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${estadoStyles[estado]}`}>
-                    {estado}
-                  </span>
+                  <div className="flex flex-col items-end gap-2">
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${estadoStyles[estado]}`}>
+                      {estadoLegible}
+                    </span>
+                    <label>
+                      <span className="sr-only">Cambiar estado de {recurso.titulo}</span>
+                      <select
+                        aria-label={`Cambiar estado de ${recurso.titulo}`}
+                        value={estado === 'Baja' ? 'Baja administrativa' : estado}
+                        disabled={estadoActualizandoId === recurso.id}
+                        onChange={(event) => void cambiarEstado(recurso, event.target.value as NonNullable<Recurso['estado']>)}
+                        className="max-w-40 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 disabled:opacity-50"
+                      >
+                        {estadosRecurso.map((estadoOpcion) => (
+                          <option key={estadoOpcion} value={estadoOpcion}>{estadoOpcion}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
                 </div>
                 <h2 className="mt-5 line-clamp-2 text-lg font-semibold leading-snug text-slate-800">{recurso.titulo}</h2>
                 <p className="mt-1 text-sm text-slate-500">{recurso.autor || 'Autor no especificado'}</p>
@@ -403,7 +446,7 @@ export const RecursosPage = () => {
                   <option>Prestado</option>
                   <option>Reservado</option>
                   <option>Perdido</option>
-                  <option>Baja</option>
+                  <option>Baja administrativa</option>
                 </select>
               </label>
 

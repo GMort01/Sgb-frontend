@@ -45,8 +45,21 @@ const estadoStyles: Record<NonNullable<Recurso['estado']>, string> = {
   Prestado: 'bg-amber-50 text-amber-700 ring-amber-200',
   Reservado: 'bg-sky-100 text-sky-700 ring-sky-200',
   Perdido: 'bg-rose-50 text-rose-700 ring-rose-200',
+  'Baja administrativa': 'bg-slate-100 text-slate-700 ring-slate-500/20',
   Baja: 'bg-slate-100 text-slate-700 ring-slate-500/20',
 };
+
+function diasRenovacion(coleccion?: Recurso['coleccion']) {
+  if (coleccion === 'General') return 15;
+  if (coleccion === 'Referencia') return 3;
+  if (coleccion === 'Hemeroteca') return 1;
+  if (coleccion === 'Tecnoteca') return 7;
+  return 0;
+}
+
+function estadoNoPrestable(estado?: Recurso['estado']) {
+  return estado === 'Perdido' || estado === 'Baja' || estado === 'Baja administrativa';
+}
 
 function formatDate(value: string) {
   const date = new Date(`${value.slice(0, 10)}T00:00:00`);
@@ -120,7 +133,7 @@ export const EstudiantePage = () => {
     ])
       .then(([todosPrestamos, todasReservas, todasMultas, listaActividades]) => {
         if (!activo) return;
-        setPrestamos(todosPrestamos.filter((item) => item.estado === 'Activo'));
+        setPrestamos(todosPrestamos.filter((item) => item.estado === 'Activo' || item.estado === 'Vencido'));
         setReservas(todasReservas);
         setMultas(todasMultas);
         setActividades(listaActividades);
@@ -154,7 +167,7 @@ export const EstudiantePage = () => {
       actividadService.obtenerTodas(),
     ]);
     setRecursos(listaRecursos);
-    setPrestamos(todosPrestamos.filter((item) => item.estado === 'Activo'));
+    setPrestamos(todosPrestamos.filter((item) => item.estado === 'Activo' || item.estado === 'Vencido'));
     setReservas(todasReservas);
     setMultas(todasMultas);
     setActividades(listaActividades);
@@ -196,7 +209,9 @@ export const EstudiantePage = () => {
     try {
       await prestamoService.renovar(prestamo.id);
       await recargarServicios();
-      setMensaje('Préstamo renovado por 14 días.');
+      const recurso = recursos.find((item) => item.id === prestamo.recursoId);
+      const dias = diasRenovacion(recurso?.coleccion);
+      setMensaje(dias ? `Préstamo renovado por ${dias} días.` : 'Préstamo renovado.');
     } catch {
       setError('No se pudo renovar. Puede que el préstamo ya no tenga renovaciones disponibles.');
     } finally {
@@ -478,7 +493,9 @@ export const EstudiantePage = () => {
                         <BookOpen size={13} aria-hidden="true" />
                         {recurso.coleccion}
                       </span>
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${estadoStyles[estado]}`}>{estado}</span>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${estadoStyles[estado]}`}>
+                        {estado === 'Baja' ? 'Baja administrativa' : estado}
+                      </span>
                     </div>
                     <h3 className="mt-5 text-lg font-semibold leading-snug text-slate-800">{recurso.titulo}</h3>
                     <p className="mt-1 text-sm text-slate-500">{recurso.autor || 'Autor no especificado'}</p>
@@ -492,7 +509,7 @@ export const EstudiantePage = () => {
                         type="button"
                         onClick={() => void solicitarRecurso(recurso)}
                         disabled={estudianteId === null || accion !== null || yaSolicitado
-                          || ['Perdido', 'Baja'].includes(estado)
+                          || estadoNoPrestable(estado)
                           || (recurso.coleccion !== 'Mapoteca' && !tieneStock && !admiteListaEspera)}
                         className="rounded-lg bg-sky-700 px-3 py-2 text-xs font-semibold text-slate-800 transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
                       >
@@ -537,9 +554,12 @@ export const EstudiantePage = () => {
                       <div key={prestamo.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/80 p-3">
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium text-slate-700">{prestamo.codigoRecurso}</p>
-                          <p className="mt-1 text-xs text-slate-500">Devolver: {formatDate(prestamo.fechaDevolucion)}</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            Devolver: {formatDate(prestamo.fechaDevolucion)}
+                            {prestamo.estado === 'Vencido' && <span className="ml-2 font-semibold text-rose-700">Vencido</span>}
+                          </p>
                         </div>
-                        <button type="button" onClick={() => void renovar(prestamo)} disabled={accion !== null || prestamo.renovacionesRestantes < 1} className="shrink-0 rounded-lg border border-sky-200 px-3 py-2 text-xs font-semibold text-sky-700 transition hover:bg-sky-100 disabled:opacity-40">
+                        <button type="button" onClick={() => void renovar(prestamo)} disabled={accion !== null || prestamo.estado === 'Vencido' || prestamo.renovacionesRestantes < 1} className="shrink-0 rounded-lg border border-sky-200 px-3 py-2 text-xs font-semibold text-sky-700 transition hover:bg-sky-100 disabled:opacity-40">
                           {accion === `prestamo-${prestamo.id}` ? '...' : 'Renovar'}
                         </button>
                       </div>

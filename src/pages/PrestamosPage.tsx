@@ -121,7 +121,7 @@ export const PrestamosPage = () => {
       setPrestamos(activos);
       setReservas(cola);
       if (resultado.reservaPromovida) {
-        setMensaje(`${resultado.reservaPromovida.usuario} tiene ahora un apartado de Colección General para recoger el ejemplar en 48 horas.`);
+        setMensaje(`${resultado.reservaPromovida.usuario} tiene ahora un apartado para recoger el ejemplar en 48 horas.`);
       } else if (resultado.promovido) {
         setMensaje(`${resultado.promovido.usuario} recibió el ejemplar desde la cola de reservas.`);
       } else {
@@ -152,7 +152,7 @@ export const PrestamosPage = () => {
         <label className="block space-y-2 text-sm font-medium text-slate-700">
           <span>Recurso</span>
           <select required value={recursoId} onChange={(event) => setRecursoId(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-            {recursos.filter((recurso) => !['Perdido', 'Baja'].includes(recurso.estado ?? '')).map((recurso) => (
+            {recursos.filter((recurso) => !['Perdido', 'Baja', 'Baja administrativa'].includes(recurso.estado ?? '')).map((recurso) => (
               <option key={recurso.id} value={recurso.id}>{recurso.titulo} · {recurso.coleccion} ({recurso.ejemplares ?? 0} disponibles)</option>
             ))}
           </select>
@@ -276,6 +276,9 @@ export const PrestamosPage = () => {
                           <span className="inline-flex items-center gap-2">
                             <CalendarDays size={15} aria-hidden="true" />
                             {formatearFecha(prestamo.fechaDevolucion)}
+                            {prestamo.estado === 'Vencido' && (
+                              <span className="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">Vencido</span>
+                            )}
                           </span>
                         </td>
                         <td className="px-4 py-4 text-slate-700">{prestamo.renovacionesRestantes} restantes</td>
@@ -284,7 +287,7 @@ export const PrestamosPage = () => {
                             <button
                               type="button"
                               onClick={() => void renovar(prestamo)}
-                              disabled={accionId !== null || prestamo.renovacionesRestantes < 1}
+                              disabled={accionId !== null || prestamo.estado === 'Vencido' || prestamo.renovacionesRestantes < 1}
                               className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 px-3 py-2 text-xs font-semibold text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               <RotateCw size={14} aria-hidden="true" />

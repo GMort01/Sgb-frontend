@@ -9,5 +9,9 @@ export const recursoService = {
   crearRecurso: async (recurso: Recurso): Promise<Recurso> => {
     const response = await api.post<{ success: boolean; data: Recurso }>('/recursos', recurso);
     return response.data.data;
-  }
+  },
+  actualizarEstado: async (id: number, estado: NonNullable<Recurso['estado']>): Promise<Recurso> => {
+    const response = await api.patch<{ success: boolean; data: Recurso }>(`/recursos/${id}/estado`, { estado });
+    return response.data.data;
+  },
 };

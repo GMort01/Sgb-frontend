@@ -5,7 +5,7 @@ export interface Recurso {
   coleccion: 'General' | 'Reserva' | 'Referencia' | 'Hemeroteca' | 'Mapoteca' | 'Tecnoteca';
   ejemplares?: number;
   ejemplaresTotales?: number;
-  estado?: 'Disponible' | 'Prestado' | 'Reservado' | 'Perdido' | 'Baja';
+  estado?: 'Disponible' | 'Prestado' | 'Reservado' | 'Perdido' | 'Baja administrativa' | 'Baja';
   isbn?: string;
   resumen?: string;
   fechaPublicacion?: string;
@@ -44,7 +44,7 @@ export interface Prestamo {
   renovacionesRestantes: number;
   medioEntrega?: string;
   bibliotecarioId?: number;
-  estado: 'Activo' | 'Devuelto';
+  estado: 'Activo' | 'Vencido' | 'Devuelto';
   usuarioId?: number;
   recursoId?: number;
 }

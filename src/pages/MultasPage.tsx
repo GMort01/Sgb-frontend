@@ -60,6 +60,23 @@ export const MultasPage = () => {
     };
   }, []);
 
+  useEffect(() => {
+    let activo = true;
+    const timer = window.setInterval(() => {
+      multaService.obtenerTodas()
+        .then((data) => {
+          if (activo) setMultas(data);
+        })
+        .catch(() => {
+          if (activo) setError('No se pudieron actualizar las multas. Comprueba la conexión con el servidor.');
+        });
+    }, 60_000);
+    return () => {
+      activo = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+
   const multasFiltradas = useMemo(() => {
     const consulta = busqueda.trim().toLocaleLowerCase();
     return multas.filter((multa) => (

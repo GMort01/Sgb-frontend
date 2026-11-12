@@ -4,7 +4,22 @@ export interface Recurso {
   autor?: string;
   coleccion: 'General' | 'Reserva' | 'Referencia' | 'Hemeroteca' | 'Mapoteca' | 'Tecnoteca';
   ejemplares?: number;
+  ejemplaresTotales?: number;
   estado?: 'Disponible' | 'Prestado' | 'Reservado' | 'Perdido' | 'Baja';
+  isbn?: string;
+  resumen?: string;
+  fechaPublicacion?: string;
+  dimensiones?: string;
+  encuadernacion?: string;
+  issn?: string;
+  periodicidad?: string;
+  formato?: 'jpg' | 'pdf' | 'shape' | 'dwg';
+  tipoEquipo?: 'Laptop' | 'Tableta';
+  numeroEquipo?: string;
+  marca?: string;
+  modelo?: string;
+  cargador?: boolean;
+  funda?: boolean;
 }
 
 export interface Usuario {
@@ -15,6 +30,9 @@ export interface Usuario {
   apellidos: string;
   correo: string;
   rol: 'Estudiante' | 'Profesor' | 'Bibliotecario';
+  plan?: string;
+  semestre?: number;
+  password?: string;
 }
 
 export interface Prestamo {
@@ -24,6 +42,8 @@ export interface Prestamo {
   fechaSalida: string;
   fechaDevolucion: string;
   renovacionesRestantes: number;
+  medioEntrega?: string;
+  bibliotecarioId?: number;
   estado: 'Activo' | 'Devuelto';
   usuarioId?: number;
   recursoId?: number;

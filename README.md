@@ -26,7 +26,7 @@ La separación por capas delimita responsabilidades, reduce el acoplamiento y fa
 1. **Presentación — frontend y API:** la interfaz React presenta la información. En el backend, Express y los controladores reciben solicitudes HTTP y generan respuestas.
 2. **Lógica de aplicación — servicios:** coordina los casos de uso y las reglas del dominio.
 3. **Persistencia — repositorios:** encapsula las consultas SQL y el acceso a los datos.
-4. **Base de datos — SQLite:** almacena recursos, usuarios, préstamos, reservas, multas y actividades.
+4. **Base de datos — Supabase PostgreSQL:** almacena recursos, usuarios, préstamos, reservas, multas y actividades.
 
 Esta división permite cambiar la interfaz sin trasladar las consultas SQL, y modificar la persistencia sin llevar esa lógica a los controladores.
 
@@ -36,7 +36,7 @@ Esta división permite cambiar la interfaz sin trasladar las consultas SQL, y mo
 2. Express dirige la solicitud al controlador de recursos.
 3. El controlador delega la operación a `recursoService`.
 4. El servicio solicita los registros a `recursoRepository`.
-5. El repositorio consulta SQLite.
+5. El repositorio consulta PostgreSQL mediante el pooler de Supabase.
 6. Los registros regresan del repositorio al servicio y al controlador.
 7. El controlador responde con **`200 OK`** y un JSON estandarizado. La API devuelve datos, no HTML.
 
@@ -62,7 +62,7 @@ Ejemplo de respuesta:
 
 [Abrir el editor Mermaid Live](https://mermaid.live/) · [Ver el diagrama compartido](https://mermaid.ai/d/16789ce8-6554-427d-917e-ce4389f31fb5)
 
-El siguiente diagrama documenta la arquitectura implementada: presentación, proxy HTTP, rutas y controladores, servicios, repositorios, transacciones, tablas SQLite y despliegue Docker. Puedes copiar el código al editor Mermaid Live para visualizarlo o exportarlo.
+El siguiente diagrama documenta la arquitectura implementada: presentación, proxy HTTP, rutas y controladores, servicios, repositorios, transacciones, tablas PostgreSQL y despliegue Docker. Puedes copiar el código al editor Mermaid Live para visualizarlo o exportarlo.
 
 ```mermaid
 flowchart LR
@@ -105,7 +105,7 @@ flowchart LR
         EventController --> EventService
     end
 
-    subgraph Persistence["Persistencia - repositorios SQLite"]
+    subgraph Persistence["Persistencia - repositorios PostgreSQL"]
         ResourceRepository["RecursoRepository"]
         UserRepository["UsuarioRepository"]
         LoanRepository["PrestamoRepository"]
@@ -136,8 +136,8 @@ flowchart LR
         EventController -.-> ApiRoutes
     end
 
-    subgraph Data["Base de datos SQLite"]
-        DB[("biblioteca.db")]
+    subgraph Data["Base de datos Supabase PostgreSQL"]
+        DB[("Supabase")]
         Tables["recursos, usuarios, prestamos, reservas, multas, actividades, inscripciones_actividades"]
         DB --> Tables
         ResourceRepository --> DB
@@ -151,10 +151,8 @@ flowchart LR
     subgraph Deployment["Despliegue Docker"]
         FrontendContainer["Contenedor frontend: Vite dev o Nginx produccion"]
         BackendContainer["Contenedor backend: Node.js / Express"]
-        DataVolume["Volumen persistente backend_data"]
         FrontendContainer -->|"red Docker: HTTP backend:3000"| BackendContainer
-        BackendContainer --> DataVolume
-        DataVolume --> DB
+        BackendContainer -->|"TLS: Session Pooler"| DB
     end
 
     ApiRoutes -.->|"respuesta JSON; p. ej. 200 OK"| ClientServices
@@ -218,7 +216,7 @@ git clone https://github.com/GMort01/Sgb-Backend.git sgb-backend
 git clone https://github.com/GMort01/Sgb-Frontend.git sgb-frontend
 ```
 
-Los archivos Compose unificados están en el repositorio backend. Desde la carpeta contenedora, entra en `sgb-backend` y levanta el entorno de **producción**:
+Los archivos Compose unificados están en el repositorio backend. Antes, copia `sgb-backend/.env.example` a `sgb-backend/.env` y completa la conexión de Supabase, la contraseña semilla y el secreto JWT. Desde la carpeta contenedora, entra en `sgb-backend` y levanta el entorno de **producción**:
 
 ```bash
 cd sgb-backend
@@ -248,7 +246,7 @@ Si iniciaste desarrollo, detén ese perfil con:
 docker compose -f docker-compose.dev.yml down
 ```
 
-En producción, Nginx sirve la interfaz y reenvía `/api` al backend por la red interna. En ambos modos, SQLite se conserva en un volumen Docker, el backend dispone de un healthcheck y el frontend espera a que la API esté saludable.
+En producción, Nginx sirve la interfaz y reenvía `/api` al backend por la red interna. En ambos modos, el backend conecta con Supabase mediante TLS, dispone de un healthcheck y el frontend espera a que la API esté saludable.
 
 ### Archivos Docker
 

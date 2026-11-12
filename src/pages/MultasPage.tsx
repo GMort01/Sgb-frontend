@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Check, CircleDollarSign, Search, ShieldAlert } from 'lucide-react';
 import { multaService } from '../services/multaService';
-import type { Multa } from '../types';
+import { usuarioService } from '../services/usuarioService';
+import type { Multa, Usuario } from '../types';
 
 const fechaHoy = () => new Date().toISOString().slice(0, 10);
 
@@ -18,7 +19,8 @@ function formatoFecha(valor: string) {
 export const MultasPage = () => {
   const [multas, setMultas] = useState<Multa[]>([]);
   const [busqueda, setBusqueda] = useState('');
-  const [usuario, setUsuario] = useState('');
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [usuarioId, setUsuarioId] = useState('');
   const [concepto, setConcepto] = useState('');
   const [monto, setMonto] = useState('');
   const [fecha, setFecha] = useState(fechaHoy);
@@ -39,9 +41,13 @@ export const MultasPage = () => {
 
   useEffect(() => {
     let activo = true;
-    multaService.obtenerTodas()
-      .then((data) => {
-        if (activo) setMultas(data);
+    Promise.all([multaService.obtenerTodas(), usuarioService.obtenerTodos()])
+      .then(([data, listaUsuarios]) => {
+        if (!activo) return;
+        setMultas(data);
+        const usuariosHabilitados = listaUsuarios.filter((item) => item.rol !== 'Bibliotecario');
+        setUsuarios(usuariosHabilitados);
+        setUsuarioId(String(usuariosHabilitados[0]?.id ?? ''));
       })
       .catch(() => {
         if (activo) setError('No se pudieron cargar las multas. Comprueba la conexión con el servidor.');
@@ -70,13 +76,13 @@ export const MultasPage = () => {
     setErrorFormulario(null);
     try {
       const nueva = await multaService.crear({
-        usuario: usuario.trim(),
+        usuarioId: Number(usuarioId),
         concepto: concepto.trim(),
         monto: Number(monto),
         fecha,
       });
       setMultas((actuales) => [nueva, ...actuales]);
-      setUsuario('');
+      setUsuarioId(String(usuarios[0]?.id ?? ''));
       setConcepto('');
       setMonto('');
       setFecha(fechaHoy());
@@ -227,14 +233,9 @@ export const MultasPage = () => {
           <form onSubmit={registrarMulta} className="space-y-4">
             <label className="block space-y-2">
               <span className="text-sm font-medium text-slate-700">Usuario</span>
-              <input
-                required
-                maxLength={160}
-                value={usuario}
-                onChange={(event) => setUsuario(event.target.value)}
-                placeholder="Nombre del usuario"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-sky-600"
-              />
+              <select required value={usuarioId} onChange={(event) => setUsuarioId(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none focus:border-sky-600">
+                {usuarios.map((item) => <option key={item.id} value={item.id}>{item.nombres} {item.apellidos} · {item.codigo}</option>)}
+              </select>
             </label>
             <label className="block space-y-2">
               <span className="text-sm font-medium text-slate-700">Concepto</span>

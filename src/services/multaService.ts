@@ -11,7 +11,7 @@ export const multaService = {
     const response = await api.get<ApiResponse<Multa[]>>('/multas');
     return response.data.data;
   },
-  crear: async (multa: Omit<Multa, 'id' | 'estado'>): Promise<Multa> => {
+  crear: async (multa: { usuarioId: number; concepto: string; monto: number; fecha: string }): Promise<Multa> => {
     const response = await api.post<ApiResponse<Multa>>('/multas', multa);
     return response.data.data;
   },

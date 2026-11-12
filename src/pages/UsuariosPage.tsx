@@ -11,6 +11,9 @@ const formularioInicial = {
   apellidos: '',
   correo: '',
   rol: 'Estudiante' as Usuario['rol'],
+  plan: '',
+  semestre: '1',
+  password: '',
 };
 
 const rolStyles: Record<Usuario['rol'], string> = {
@@ -76,6 +79,9 @@ export const UsuariosPage = () => {
         nombres: formulario.nombres.trim(),
         apellidos: formulario.apellidos.trim(),
         correo: formulario.correo.trim(),
+        plan: formulario.rol === 'Estudiante' ? formulario.plan.trim() : undefined,
+        semestre: formulario.rol === 'Estudiante' ? Number(formulario.semestre) : undefined,
+        password: formulario.password,
       });
       setUsuarios((actuales) => [...actuales, nuevoUsuario].sort((a, b) => (
         `${a.apellidos} ${a.nombres}`.localeCompare(`${b.apellidos} ${b.nombres}`, 'es')
@@ -258,6 +264,22 @@ export const UsuariosPage = () => {
                   <option>Profesor</option>
                   <option>Bibliotecario</option>
                 </select>
+              </label>
+              {formulario.rol === 'Estudiante' && (
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-slate-700">Plan académico</span>
+                    <input required maxLength={120} value={formulario.plan} onChange={(event) => setFormulario({ ...formulario, plan: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800" />
+                  </label>
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-slate-700">Semestre</span>
+                    <input type="number" required min="1" max="20" value={formulario.semestre} onChange={(event) => setFormulario({ ...formulario, semestre: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800" />
+                  </label>
+                </div>
+              )}
+              <label className="block space-y-2">
+                <span className="text-sm font-medium text-slate-700">Contraseña inicial (mínimo 8 caracteres)</span>
+                <input type="password" autoComplete="new-password" required minLength={8} maxLength={128} value={formulario.password} onChange={(event) => setFormulario({ ...formulario, password: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800" />
               </label>
               {errorFormulario && <p role="alert" className="text-sm text-rose-700">{errorFormulario}</p>}
               <div className="flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end">

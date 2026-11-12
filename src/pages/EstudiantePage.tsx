@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
+import { isAxiosError } from 'axios';
 import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, Check, MapPin, Search, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { actividadService } from '../services/actividadService';
-import { estudianteService } from '../services/estudianteService';
 import { prestamoService } from '../services/prestamoService';
 import { recursoService } from '../services/recursoService';
-import type { Actividad, EstudianteDemo, Prestamo, Recurso, Reserva } from '../types';
+import { useAuth } from '../auth/useAuth';
+import type { Actividad, Prestamo, Recurso, Reserva } from '../types';
 
 const colecciones: Array<Recurso['coleccion']> = [
   'General',
@@ -32,34 +33,26 @@ function formatDate(value: string) {
 }
 
 export const EstudiantePage = () => {
+  const { usuario, cerrarSesion } = useAuth();
   const [recursos, setRecursos] = useState<Recurso[]>([]);
-  const [estudiantes, setEstudiantes] = useState<EstudianteDemo[]>([]);
-  const [estudianteId, setEstudianteId] = useState<number | null>(null);
   const [prestamos, setPrestamos] = useState<Prestamo[]>([]);
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [actividades, setActividades] = useState<Actividad[]>([]);
   const [busqueda, setBusqueda] = useState('');
   const [coleccion, setColeccion] = useState('Todas');
   const [cargandoCatalogo, setCargandoCatalogo] = useState(true);
-  const [cargandoServicios, setCargandoServicios] = useState(false);
+  const [cargandoServicios, setCargandoServicios] = useState(true);
   const [accion, setAccion] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
+  const estudianteId = usuario?.id ?? null;
 
   useEffect(() => {
     let activo = true;
-    Promise.all([recursoService.obtenerTodos(), estudianteService.obtenerTodos()])
-      .then(([listaRecursos, listaEstudiantes]) => {
+    recursoService.obtenerTodos()
+      .then((listaRecursos) => {
         if (!activo) return;
         setRecursos(listaRecursos);
-        setEstudiantes(listaEstudiantes);
-        const guardado = Number(window.localStorage.getItem('sgb-demo-estudiante'));
-        const estudianteGuardado = listaEstudiantes.find((item) => item.id === guardado);
-        const estudianteInicial = estudianteGuardado ?? listaEstudiantes[0];
-        if (estudianteInicial) {
-          setEstudianteId(estudianteInicial.id);
-          window.localStorage.setItem('sgb-demo-estudiante', String(estudianteInicial.id));
-        }
       })
       .catch(() => {
         if (activo) setError('No se pudo cargar la información de la biblioteca. Intenta de nuevo más tarde.');
@@ -78,12 +71,12 @@ export const EstudiantePage = () => {
     Promise.all([
       prestamoService.obtenerTodos(),
       prestamoService.obtenerReservas(),
-      actividadService.obtenerTodas(estudianteId),
+    actividadService.obtenerTodas(),
     ])
       .then(([todosPrestamos, todasReservas, listaActividades]) => {
         if (!activo) return;
-        setPrestamos(todosPrestamos.filter((item) => item.usuarioId === estudianteId && item.estado === 'Activo'));
-        setReservas(todasReservas.filter((item) => item.usuarioId === estudianteId));
+      setPrestamos(todosPrestamos.filter((item) => item.estado === 'Activo'));
+      setReservas(todasReservas);
         setActividades(listaActividades);
       })
       .catch(() => {
@@ -105,19 +98,17 @@ export const EstudiantePage = () => {
     ));
   }, [busqueda, coleccion, recursos]);
 
-  const estudianteActual = estudiantes.find((item) => item.id === estudianteId);
-
   const recargarServicios = async () => {
     if (estudianteId === null) return;
     const [listaRecursos, todosPrestamos, todasReservas, listaActividades] = await Promise.all([
       recursoService.obtenerTodos(),
       prestamoService.obtenerTodos(),
       prestamoService.obtenerReservas(),
-      actividadService.obtenerTodas(estudianteId),
+      actividadService.obtenerTodas(),
     ]);
     setRecursos(listaRecursos);
-    setPrestamos(todosPrestamos.filter((item) => item.usuarioId === estudianteId && item.estado === 'Activo'));
-    setReservas(todasReservas.filter((item) => item.usuarioId === estudianteId));
+    setPrestamos(todosPrestamos.filter((item) => item.estado === 'Activo'));
+    setReservas(todasReservas);
     setActividades(listaActividades);
   };
 
@@ -127,13 +118,21 @@ export const EstudiantePage = () => {
     setError(null);
     setMensaje(null);
     try {
-      const resultado = await prestamoService.solicitar(estudianteId, recurso.id);
+      if ((recurso.ejemplares ?? 0) > 0) {
+        setMensaje('El préstamo debe ser registrado por un bibliotecario. Acércate al mostrador.');
+        return;
+      }
+      if (recurso.coleccion === 'Mapoteca') {
+        setMensaje('El material de Mapoteca se presta por USB en modalidad de lectura. Acércate al mostrador.');
+        return;
+      }
+      const resultado = await prestamoService.reservar(recurso.id);
       await recargarServicios();
-      setMensaje(resultado.tipo === 'prestamo'
-        ? `Préstamo registrado para “${recurso.titulo}”. Tienes 14 días para devolverlo.`
-        : `No quedan ejemplares. Quedaste en la posición ${resultado.data.posicion} de la lista de espera.`);
-    } catch {
-      setError('No se pudo procesar la solicitud. Puede que ya hayas pedido este recurso.');
+      setMensaje(`No quedan ejemplares de “${recurso.titulo}”. Quedaste en la posición ${resultado.posicion} de la lista de espera.`);
+    } catch (requestError) {
+      setError(isAxiosError(requestError) && typeof requestError.response?.data?.message === 'string'
+        ? requestError.response.data.message
+        : 'No se pudo procesar la solicitud. Puede que ya hayas pedido este recurso.');
     } finally {
       setAccion(null);
     }
@@ -194,26 +193,9 @@ export const EstudiantePage = () => {
             <ArrowLeft size={17} aria-hidden="true" />
             SGB Unimadeira
           </Link>
-          <div className="flex items-center gap-3">
-            <label htmlFor="perfil-demo" className="hidden text-xs text-slate-500 sm:block">Perfil de demostración</label>
-            <select
-              id="perfil-demo"
-              value={estudianteId ?? ''}
-              disabled={estudiantes.length === 0}
-              onChange={(event) => {
-                const id = Number(event.target.value);
-                setEstudianteId(id);
-                setCargandoServicios(true);
-                window.localStorage.setItem('sgb-demo-estudiante', String(id));
-                setMensaje(null);
-              }}
-              className="max-w-56 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 outline-none focus:border-sky-600"
-            >
-              {estudiantes.length === 0 && <option value="">Cargando perfil...</option>}
-              {estudiantes.map((item) => (
-                <option key={item.id} value={item.id}>{item.nombres} {item.apellidos} · {item.codigo}</option>
-              ))}
-            </select>
+          <div className="flex items-center gap-3 text-xs">
+            <span className="text-slate-600">{usuario?.nombres} {usuario?.apellidos}</span>
+            <button type="button" onClick={cerrarSesion} className="font-semibold text-sky-700">Cerrar sesión</button>
           </div>
         </div>
       </header>
@@ -222,12 +204,12 @@ export const EstudiantePage = () => {
         <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-100 via-white to-cyan-100/50 p-7 sm:p-10 lg:p-12">
           <div className="absolute -right-12 -top-16 h-72 w-72 rounded-full bg-sky-100 blur-3xl" aria-hidden="true" />
           <div className="relative max-w-2xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-700">Portal estudiantil de demostración</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-700">Portal de la comunidad</p>
             <h1 className="mt-3 text-3xl font-bold leading-tight text-slate-800 sm:text-5xl">
-              Hola{estudianteActual ? `, ${estudianteActual.nombres}` : ''}. Encuentra tu próxima lectura.
+              Hola{usuario ? `, ${usuario.nombres}` : ''}. Encuentra tu próxima lectura.
             </h1>
             <p className="mt-4 max-w-xl leading-relaxed text-slate-500">
-              Busca recursos, solicita préstamos, reserva títulos sin ejemplares y apúntate a actividades. No necesitas iniciar sesión.
+              Busca recursos, consulta tus préstamos y reserva títulos sin ejemplares.
             </p>
             <a href="#catalogo" className="mt-7 inline-flex items-center gap-2 rounded-xl bg-sky-700 px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-sky-600">
               Buscar en el catálogo <ArrowRight size={16} aria-hidden="true" />
@@ -285,7 +267,7 @@ export const EstudiantePage = () => {
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {resultados.map((recurso) => {
-                const estado = recurso.estado === 'Disponible' && (recurso.ejemplares ?? 0) < 1
+                const estado = recurso.estado === 'Disponible' && recurso.coleccion !== 'Mapoteca' && (recurso.ejemplares ?? 0) < 1
                   ? 'Prestado'
                   : recurso.estado ?? 'Disponible';
                 const yaSolicitado = prestamos.some((item) => item.recursoId === recurso.id)
@@ -303,14 +285,18 @@ export const EstudiantePage = () => {
                     <h3 className="mt-5 text-lg font-semibold leading-snug text-slate-800">{recurso.titulo}</h3>
                     <p className="mt-1 text-sm text-slate-500">{recurso.autor || 'Autor no especificado'}</p>
                     <div className="mt-auto flex items-center justify-between gap-3 border-t border-slate-200 pt-4">
-                      <span className="text-xs text-slate-500">{recurso.ejemplares ?? 0} disponibles</span>
+                      <span className="text-xs text-slate-500">
+                        {recurso.coleccion === 'Mapoteca'
+                          ? 'Préstamo por USB'
+                          : `${recurso.ejemplares ?? 0} disponibles / ${recurso.ejemplaresTotales ?? recurso.ejemplares ?? 0} registrados`}
+                      </span>
                       <button
                         type="button"
                         onClick={() => void solicitarRecurso(recurso)}
                         disabled={estudianteId === null || accion !== null || yaSolicitado || ['Perdido', 'Baja'].includes(estado)}
                         className="rounded-lg bg-sky-700 px-3 py-2 text-xs font-semibold text-slate-800 transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
                       >
-                        {accion === `recurso-${recurso.id}` ? 'Solicitando...' : yaSolicitado ? 'Ya solicitado' : tieneStock ? 'Solicitar préstamo' : 'Reservar'}
+                        {accion === `recurso-${recurso.id}` ? 'Procesando...' : yaSolicitado ? 'Ya solicitado' : recurso.coleccion === 'Mapoteca' ? 'Consultar en mostrador' : tieneStock ? 'Préstamo en mostrador' : 'Reservar'}
                       </button>
                     </div>
                   </article>
@@ -324,7 +310,7 @@ export const EstudiantePage = () => {
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-sky-700">Tu actividad</p>
             <h2 className="mt-1 text-2xl font-bold text-slate-800">Mis préstamos y reservas</h2>
-            <p className="mt-1 text-sm text-slate-500">Perfil demo: {estudianteActual ? `${estudianteActual.nombres} ${estudianteActual.apellidos} (${estudianteActual.codigo})` : 'selecciona un estudiante'}.</p>
+            <p className="mt-1 text-sm text-slate-500">Sesión de {usuario?.nombres} {usuario?.apellidos} · {usuario?.codigo}.</p>
           </div>
           {cargandoServicios ? (
             <div className="grid gap-4 md:grid-cols-2" aria-label="Cargando tu actividad">
@@ -429,9 +415,9 @@ export const EstudiantePage = () => {
         </section>
 
         <footer className="border-t border-slate-200 pt-6 text-center text-xs text-slate-500">
-          <Link to="/" className="transition hover:text-slate-700">Volver a la selección de perfil</Link>
+          <Link to="/" className="transition hover:text-slate-700">Volver al portal</Link>
           <span className="mx-2">·</span>
-          Demostración abierta: el perfil seleccionado solo organiza la experiencia, no autentica identidad.
+          Tus datos y acciones están asociados a tu cuenta.
         </footer>
       </div>
     </main>

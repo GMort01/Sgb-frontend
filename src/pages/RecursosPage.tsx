@@ -23,10 +23,33 @@ const estadoStyles: Record<NonNullable<Recurso['estado']>, string> = {
 const estadoInicial = {
   titulo: '',
   autor: '',
+  isbn: '',
+  resumen: '',
+  fechaPublicacion: '',
+  dimensiones: '',
+  encuadernacion: '',
+  issn: '',
+  periodicidad: '',
+  formato: 'pdf' as NonNullable<Recurso['formato']>,
+  tipoEquipo: 'Laptop' as NonNullable<Recurso['tipoEquipo']>,
+  numeroEquipo: '',
+  marca: '',
+  modelo: '',
+  cargador: true,
+  funda: true,
   coleccion: 'General' as Recurso['coleccion'],
-  ejemplares: '1',
+  ejemplares: '5',
   estado: 'Disponible' as NonNullable<Recurso['estado']>,
 };
+
+function minimoEjemplares(coleccion: Recurso['coleccion'], tipoEquipo: Recurso['tipoEquipo']) {
+  if (coleccion === 'General') return 5;
+  if (coleccion === 'Reserva') return 10;
+  if (coleccion === 'Referencia') return 3;
+  if (coleccion === 'Hemeroteca') return 2;
+  if (coleccion === 'Tecnoteca') return tipoEquipo === 'Tableta' ? 10 : 3;
+  return 0;
+}
 
 export const RecursosPage = () => {
   const [recursos, setRecursos] = useState<Recurso[]>([]);
@@ -84,7 +107,7 @@ export const RecursosPage = () => {
         titulo: formulario.titulo.trim(),
         autor: formulario.autor.trim() || undefined,
         coleccion: formulario.coleccion,
-        ejemplares: Number(formulario.ejemplares),
+        ...(formulario.coleccion === 'Mapoteca' ? {} : { ejemplares: Number(formulario.ejemplares) }),
         estado: formulario.estado,
       });
       setRecursos((actuales) => [nuevoRecurso, ...actuales]);
@@ -168,7 +191,7 @@ export const RecursosPage = () => {
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {recursosFiltrados.map((recurso) => {
-            const estado = recurso.estado === 'Disponible' && (recurso.ejemplares ?? 0) < 1
+            const estado = recurso.estado === 'Disponible' && recurso.coleccion !== 'Mapoteca' && (recurso.ejemplares ?? 0) < 1
               ? 'Prestado'
               : recurso.estado ?? 'Disponible';
             return (
@@ -189,7 +212,11 @@ export const RecursosPage = () => {
                 <p className="mt-1 text-sm text-slate-500">{recurso.autor || 'Autor no especificado'}</p>
                 <div className="mt-auto flex items-center justify-between border-t border-slate-200 pt-4">
                   <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Ejemplares</span>
-                  <span className="text-sm font-semibold text-slate-700">{recurso.ejemplares ?? 0} disponibles</span>
+                  <span className="text-sm font-semibold text-slate-700">
+                    {recurso.coleccion === 'Mapoteca'
+                      ? 'Préstamo por USB'
+                      : `${recurso.ejemplares ?? 0} disponibles / ${recurso.ejemplaresTotales ?? recurso.ejemplares ?? 0} registrados`}
+                  </span>
                 </div>
               </article>
             );
@@ -208,7 +235,7 @@ export const RecursosPage = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-titulo"
-            className="my-auto w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl shadow-black/40 sm:p-8"
+            className="my-auto w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl shadow-black/40 sm:p-8"
           >
             <div className="mb-6 flex items-start justify-between">
               <div>
@@ -253,25 +280,118 @@ export const RecursosPage = () => {
                   <span className="text-sm font-medium text-slate-700">Colección</span>
                   <select
                     value={formulario.coleccion}
-                    onChange={(event) => setFormulario({ ...formulario, coleccion: event.target.value as Recurso['coleccion'] })}
+                    onChange={(event) => {
+                      const coleccion = event.target.value as Recurso['coleccion'];
+                      setFormulario({
+                        ...formulario,
+                        coleccion,
+                        ejemplares: String(minimoEjemplares(coleccion, formulario.tipoEquipo) || 0),
+                      });
+                    }}
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800 outline-none focus:border-sky-600"
                   >
                     {colecciones.map((coleccion) => <option key={coleccion} value={coleccion}>{coleccion}</option>)}
                   </select>
                 </label>
-                <label className="block space-y-2">
-                  <span className="text-sm font-medium text-slate-700">Ejemplares</span>
-                  <input
-                    type="number"
-                    min="1"
-                    max="999"
-                    required
-                    value={formulario.ejemplares}
-                    onChange={(event) => setFormulario({ ...formulario, ejemplares: event.target.value })}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800 outline-none focus:border-sky-600"
-                  />
-                </label>
+                {formulario.coleccion !== 'Mapoteca' && (
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-slate-700">Ejemplares iniciales</span>
+                    <input
+                      type="number"
+                      min={minimoEjemplares(formulario.coleccion, formulario.tipoEquipo)}
+                      max="999"
+                      required
+                      value={formulario.ejemplares}
+                      onChange={(event) => setFormulario({ ...formulario, ejemplares: event.target.value })}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800 outline-none focus:border-sky-600"
+                    />
+                  </label>
+                )}
               </div>
+              {['General', 'Reserva'].includes(formulario.coleccion) && (
+                <>
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <label className="block space-y-2">
+                      <span className="text-sm font-medium text-slate-700">ISBN</span>
+                      <input required maxLength={20} value={formulario.isbn} onChange={(event) => setFormulario({ ...formulario, isbn: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800" />
+                    </label>
+                    <label className="block space-y-2">
+                      <span className="text-sm font-medium text-slate-700">Fecha de publicación</span>
+                      <input type="date" required value={formulario.fechaPublicacion} onChange={(event) => setFormulario({ ...formulario, fechaPublicacion: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800" />
+                    </label>
+                    <label className="block space-y-2">
+                      <span className="text-sm font-medium text-slate-700">Dimensiones</span>
+                      <input required maxLength={100} value={formulario.dimensiones} onChange={(event) => setFormulario({ ...formulario, dimensiones: event.target.value })} placeholder="Ej. 15 x 23 cm" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800" />
+                    </label>
+                    <label className="block space-y-2">
+                      <span className="text-sm font-medium text-slate-700">Encuadernación</span>
+                      <input required maxLength={100} value={formulario.encuadernacion} onChange={(event) => setFormulario({ ...formulario, encuadernacion: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800" />
+                    </label>
+                  </div>
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-slate-700">Resumen</span>
+                    <textarea required maxLength={2000} value={formulario.resumen} onChange={(event) => setFormulario({ ...formulario, resumen: event.target.value })} rows={3} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800" />
+                  </label>
+                </>
+              )}
+              {formulario.coleccion === 'Referencia' && (
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium text-slate-700">Medidas (pulgadas)</span>
+                  <input required maxLength={100} value={formulario.dimensiones} onChange={(event) => setFormulario({ ...formulario, dimensiones: event.target.value })} placeholder="Ej. 8 x 10 pulgadas" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800" />
+                </label>
+              )}
+              {formulario.coleccion === 'Hemeroteca' && (
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-slate-700">ISSN</span>
+                    <input required maxLength={20} value={formulario.issn} onChange={(event) => setFormulario({ ...formulario, issn: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800" />
+                  </label>
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-slate-700">Periodicidad</span>
+                    <input required maxLength={80} value={formulario.periodicidad} onChange={(event) => setFormulario({ ...formulario, periodicidad: event.target.value })} placeholder="Mensual, semanal..." className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800" />
+                  </label>
+                </div>
+              )}
+              {formulario.coleccion === 'Mapoteca' && (
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium text-slate-700">Formato digital</span>
+                  <select value={formulario.formato} onChange={(event) => setFormulario({ ...formulario, formato: event.target.value as NonNullable<Recurso['formato']> })} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800">
+                    <option value="jpg">JPG</option><option value="pdf">PDF</option><option value="shape">Shape</option><option value="dwg">DWG</option>
+                  </select>
+                  <span className="block text-xs text-slate-500">Préstamo de lectura mediante USB; no se administra cantidad de ejemplares.</span>
+                </label>
+              )}
+              {formulario.coleccion === 'Tecnoteca' && (
+                <>
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <label className="block space-y-2">
+                      <span className="text-sm font-medium text-slate-700">Tipo de equipo</span>
+                      <select value={formulario.tipoEquipo} onChange={(event) => {
+                        const tipoEquipo = event.target.value as NonNullable<Recurso['tipoEquipo']>;
+                        setFormulario({ ...formulario, tipoEquipo, ejemplares: String(minimoEjemplares('Tecnoteca', tipoEquipo)) });
+                      }} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800">
+                        <option>Laptop</option><option>Tableta</option>
+                      </select>
+                    </label>
+                    <label className="block space-y-2">
+                      <span className="text-sm font-medium text-slate-700">Número de equipo</span>
+                      <input required maxLength={40} value={formulario.numeroEquipo} onChange={(event) => setFormulario({ ...formulario, numeroEquipo: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800" />
+                    </label>
+                    <label className="block space-y-2">
+                      <span className="text-sm font-medium text-slate-700">Marca</span>
+                      <input required maxLength={80} value={formulario.marca} onChange={(event) => setFormulario({ ...formulario, marca: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800" />
+                    </label>
+                    <label className="block space-y-2">
+                      <span className="text-sm font-medium text-slate-700">Modelo</span>
+                      <input required maxLength={80} value={formulario.modelo} onChange={(event) => setFormulario({ ...formulario, modelo: event.target.value })} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800" />
+                    </label>
+                  </div>
+                  <div className="flex gap-6 text-sm text-slate-700">
+                    <label className="flex items-center gap-2"><input type="checkbox" checked={formulario.cargador} onChange={(event) => setFormulario({ ...formulario, cargador: event.target.checked })} />Incluye cargador</label>
+                    <label className="flex items-center gap-2"><input type="checkbox" checked={formulario.funda} onChange={(event) => setFormulario({ ...formulario, funda: event.target.checked })} />Incluye funda</label>
+                  </div>
+                </>
+              )}
               <label className="block space-y-2">
                 <span className="text-sm font-medium text-slate-700">Estado</span>
                 <select

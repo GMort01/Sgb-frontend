@@ -1,20 +1,29 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { ArrowRightLeft, BookCopy, CalendarDays, Check, Clock3, RotateCw } from 'lucide-react';
 import { prestamoService } from '../services/prestamoService';
-import type { Prestamo, Reserva } from '../types';
+import { recursoService } from '../services/recursoService';
+import { usuarioService } from '../services/usuarioService';
+import type { Prestamo, Recurso, Reserva, Usuario } from '../types';
 
 type Pestana = 'activos' | 'reservas';
 
 function formatearFecha(fecha: string) {
   const fechaLocal = new Date(`${fecha.slice(0, 10)}T00:00:00`);
-  if (Number.isNaN(fechaLocal.getTime())) return fecha;
-  return new Intl.DateTimeFormat('es', { day: '2-digit', month: 'short', year: 'numeric' }).format(fechaLocal);
+  const formatted = Number.isNaN(fechaLocal.getTime())
+    ? fecha.slice(0, 10)
+    : new Intl.DateTimeFormat('es', { day: '2-digit', month: 'short', year: 'numeric' }).format(fechaLocal);
+  return fecha.includes('21:00') ? `${formatted} · 21:00` : formatted;
 }
 
 export const PrestamosPage = () => {
   const [pestana, setPestana] = useState<Pestana>('activos');
   const [prestamos, setPrestamos] = useState<Prestamo[]>([]);
   const [reservas, setReservas] = useState<Reserva[]>([]);
+  const [recursos, setRecursos] = useState<Recurso[]>([]);
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [usuarioId, setUsuarioId] = useState('');
+  const [recursoId, setRecursoId] = useState('');
+  const [registrando, setRegistrando] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [accionId, setAccionId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -22,11 +31,20 @@ export const PrestamosPage = () => {
   useEffect(() => {
     let activo = true;
 
-    Promise.all([prestamoService.obtenerActivos(), prestamoService.obtenerReservas()])
-      .then(([prestamosActivos, colaReservas]) => {
+    Promise.all([
+      prestamoService.obtenerActivos(),
+      prestamoService.obtenerReservas(),
+      recursoService.obtenerTodos(),
+      usuarioService.obtenerTodos(),
+    ])
+      .then(([prestamosActivos, colaReservas, listaRecursos, listaUsuarios]) => {
         if (!activo) return;
         setPrestamos(prestamosActivos);
         setReservas(colaReservas);
+        setRecursos(listaRecursos);
+        setUsuarios(listaUsuarios.filter((item) => item.rol === 'Estudiante' || item.rol === 'Profesor'));
+        setUsuarioId(String(listaUsuarios.find((item) => item.rol === 'Estudiante' || item.rol === 'Profesor')?.id ?? ''));
+        setRecursoId(String(listaRecursos[0]?.id ?? ''));
       })
       .catch(() => {
         if (activo) setError('No se pudieron cargar los préstamos y las reservas. Inténtalo de nuevo.');
@@ -39,6 +57,29 @@ export const PrestamosPage = () => {
       activo = false;
     };
   }, []);
+
+  const registrarPrestamo = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setRegistrando(true);
+    setError(null);
+    try {
+      const resultado = await prestamoService.solicitar(Number(usuarioId), Number(recursoId));
+      const [activos, cola] = await Promise.all([
+        prestamoService.obtenerActivos(),
+        prestamoService.obtenerReservas(),
+      ]);
+      setPrestamos(activos);
+      setReservas(cola);
+      setRecursos(await recursoService.obtenerTodos());
+      setError(resultado.tipo === 'prestamo'
+        ? `Préstamo registrado. Devolución prevista: ${formatearFecha(resultado.data.fechaDevolucion)}.`
+        : `Sin ejemplares disponibles. Se creó una reserva en la posición ${resultado.data.posicion}.`);
+    } catch {
+      setError('No se pudo registrar la operación. Verifica la disponibilidad, las multas pendientes y los datos.');
+    } finally {
+      setRegistrando(false);
+    }
+  };
 
   const renovar = async (prestamo: Prestamo) => {
     setAccionId(prestamo.id);
@@ -81,6 +122,26 @@ export const PrestamosPage = () => {
         <h1 className="text-3xl font-bold tracking-tight text-slate-800 sm:text-4xl">Préstamos y reservas</h1>
         <p className="mt-2 text-slate-500">Administra los préstamos activos y consulta la cola de espera.</p>
       </header>
+
+      <form onSubmit={registrarPrestamo} className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+        <label className="block space-y-2 text-sm font-medium text-slate-700">
+          <span>Estudiante o profesor</span>
+          <select required value={usuarioId} onChange={(event) => setUsuarioId(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+            {usuarios.map((usuario) => <option key={usuario.id} value={usuario.id}>{usuario.nombres} {usuario.apellidos} · {usuario.codigo}</option>)}
+          </select>
+        </label>
+        <label className="block space-y-2 text-sm font-medium text-slate-700">
+          <span>Recurso</span>
+          <select required value={recursoId} onChange={(event) => setRecursoId(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+            {recursos.filter((recurso) => !['Perdido', 'Baja'].includes(recurso.estado ?? '')).map((recurso) => (
+              <option key={recurso.id} value={recurso.id}>{recurso.titulo} · {recurso.coleccion} ({recurso.ejemplares ?? 0} disponibles)</option>
+            ))}
+          </select>
+        </label>
+        <button type="submit" disabled={registrando || !usuarioId || !recursoId} className="rounded-xl bg-sky-700 px-5 py-3 font-semibold text-white disabled:opacity-50">
+          {registrando ? 'Registrando...' : 'Registrar préstamo'}
+        </button>
+      </form>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5">
@@ -171,6 +232,7 @@ export const PrestamosPage = () => {
                     <tr className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500">
                       <th scope="col" className="px-4 py-3 font-semibold">Usuario</th>
                       <th scope="col" className="px-4 py-3 font-semibold">Código recurso</th>
+                      <th scope="col" className="px-4 py-3 font-semibold">Medio</th>
                       <th scope="col" className="px-4 py-3 font-semibold">Fecha salida</th>
                       <th scope="col" className="px-4 py-3 font-semibold">Fecha devolución</th>
                       <th scope="col" className="px-4 py-3 font-semibold">Renovaciones</th>
@@ -184,6 +246,7 @@ export const PrestamosPage = () => {
                         <td className="px-4 py-4">
                           <span className="rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-xs text-sky-800">{prestamo.codigoRecurso}</span>
                         </td>
+                        <td className="px-4 py-4 text-slate-500">{prestamo.medioEntrega ?? 'Regular'}</td>
                         <td className="px-4 py-4 text-slate-500">{formatearFecha(prestamo.fechaSalida)}</td>
                         <td className="px-4 py-4 text-slate-500">
                           <span className="inline-flex items-center gap-2">

@@ -1,3 +1,193 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+html {
+  color-scheme: light;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+html.dark body {
+  background-color: #0d1412;
+  color: #e5ebe8;
+}
+
+html.dark .bg-white,
+html.dark [class~="bg-white/80"] {
+  background-color: #17211f;
+}
+
+html.dark .bg-slate-50,
+html.dark [class~="bg-slate-50/40"],
+html.dark [class~="bg-slate-50/90"],
+html.dark [class~="bg-slate-50/95"] {
+  background-color: #121a18;
+}
+
+html.dark .bg-slate-100,
+html.dark [class~="bg-slate-100/80"],
+html.dark [class~="bg-[#f5f6f3]"] {
+  background-color: #1a2522;
+}
+
+html.dark .bg-slate-200 {
+  background-color: #283630;
+}
+
+html.dark [class~="bg-[#f7f7f4]"] {
+  background-color: #0d1412;
+}
+
+html.dark [class~="bg-[#fbfaf7]"] {
+  background-color: #1b2622;
+}
+
+html.dark [class~="bg-[#edf2ef]"] {
+  background-color: #233b34;
+}
+
+html.dark .bg-sky-50,
+html.dark .bg-sky-100 {
+  background-color: #172d35;
+}
+
+html.dark .bg-emerald-50 {
+  background-color: #17352b;
+}
+
+html.dark .bg-amber-50 {
+  background-color: #382e1a;
+}
+
+html.dark .bg-rose-50 {
+  background-color: #3d2426;
+}
+
+html.dark .bg-violet-50 {
+  background-color: #302740;
+}
+
+html.dark .bg-gradient-to-br {
+  background-image: linear-gradient(135deg, #18231f, #121a18 55%, #193238);
+}
+
+html.dark .text-slate-800 {
+  color: #e5ebe8;
+}
+
+html.dark .text-slate-700 {
+  color: #d4ded9;
+}
+
+html.dark .text-slate-600 {
+  color: #b7c4be;
+}
+
+html.dark .text-slate-500 {
+  color: #9aa9a2;
+}
+
+html.dark .text-slate-400 {
+  color: #82928b;
+}
+
+html.dark [class~="text-[#173b35]"] {
+  color: #d8e6e0;
+}
+
+html.dark [class~="text-[#28574e]"] {
+  color: #a7c7bb;
+}
+
+html.dark [class~="text-[#826a3f]"] {
+  color: #d7bd85;
+}
+
+html.dark .text-sky-700,
+html.dark .text-sky-800 {
+  color: #8bc4db;
+}
+
+html.dark .text-emerald-700,
+html.dark .text-emerald-800 {
+  color: #86d8a2;
+}
+
+html.dark .text-amber-700 {
+  color: #e8c779;
+}
+
+html.dark .text-rose-700,
+html.dark .text-rose-800 {
+  color: #f0a2a3;
+}
+
+html.dark .text-violet-700 {
+  color: #c4a8ee;
+}
+
+html.dark .border-slate-100,
+html.dark .border-slate-200,
+html.dark .border-slate-300 {
+  border-color: #293631;
+}
+
+html.dark .border-sky-200,
+html.dark .ring-sky-200 {
+  border-color: #315466;
+  --tw-ring-color: #315466;
+}
+
+html.dark .border-emerald-200,
+html.dark .ring-emerald-200 {
+  border-color: #28523a;
+  --tw-ring-color: #28523a;
+}
+
+html.dark .border-rose-200,
+html.dark .ring-rose-200 {
+  border-color: #61383a;
+  --tw-ring-color: #61383a;
+}
+
+html.dark .ring-amber-200 {
+  --tw-ring-color: #665324;
+}
+
+html.dark .ring-violet-200 {
+  --tw-ring-color: #4a3b65;
+}
+
+html.dark [class~="hover:bg-slate-50"]:hover,
+html.dark [class~="hover:bg-slate-50/90"]:hover {
+  background-color: #1a2522;
+}
+
+html.dark [class~="hover:bg-[#fbfaf7]"]:hover {
+  background-color: #23332d;
+}
+
+html.dark [class~="hover:bg-sky-100"]:hover {
+  background-color: #203b46;
+}
+
+html.dark input,
+html.dark select,
+html.dark textarea {
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    transition: none;
+  }
+}

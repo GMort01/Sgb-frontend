@@ -6,6 +6,7 @@ import { actividadService } from '../services/actividadService';
 import { prestamoService } from '../services/prestamoService';
 import { recursoService } from '../services/recursoService';
 import { useAuth } from '../auth/useAuth';
+import { ThemeToggle } from '../components/ThemeToggle';
 import type { Actividad, Prestamo, Recurso, Reserva } from '../types';
 
 const colecciones: Array<Recurso['coleccion']> = [
@@ -194,7 +195,8 @@ export const EstudiantePage = () => {
             SGB Unimadeira
           </Link>
           <div className="flex items-center gap-3 text-xs">
-            <span className="text-slate-600">{usuario?.nombres} {usuario?.apellidos}</span>
+            <span className="text-slate-600">{usuario?.nombres} {usuario?.apellidos} · {usuario?.rol}</span>
+            <ThemeToggle />
             <button type="button" onClick={cerrarSesion} className="font-semibold text-sky-700">Cerrar sesión</button>
           </div>
         </div>
@@ -373,7 +375,7 @@ export const EstudiantePage = () => {
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-sky-700">Vida universitaria</p>
             <h2 className="mt-1 text-2xl font-bold text-slate-800">Horarios y actividades</h2>
-            <p className="mt-1 text-sm text-slate-500">Consulta los próximos eventos e inscríbete con tu perfil de demostración.</p>
+            <p className="mt-1 text-sm text-slate-500">Estudiantes y profesores pueden consultar e inscribirse a las actividades.</p>
           </div>
           {cargandoServicios ? (
             <div className="grid gap-4 md:grid-cols-3" aria-label="Cargando actividades">

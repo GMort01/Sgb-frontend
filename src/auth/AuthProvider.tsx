@@ -30,8 +30,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(() => ({
     usuario,
     cargando,
-    async iniciarSesion(correo, password) {
-      const session = await authService.iniciarSesion(correo, password);
+    async iniciarSesion(correo, password, rolesPermitidos) {
+      const session = await authService.iniciarSesion(correo, password, rolesPermitidos);
       setUsuario(session.usuario);
       return session.usuario;
     },

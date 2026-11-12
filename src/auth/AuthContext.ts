@@ -4,7 +4,7 @@ import type { Usuario } from '../types';
 export interface AuthContextValue {
   usuario: Usuario | null;
   cargando: boolean;
-  iniciarSesion: (correo: string, password: string) => Promise<Usuario>;
+  iniciarSesion: (correo: string, password: string, rolesPermitidos?: Usuario['rol'][]) => Promise<Usuario>;
   cerrarSesion: () => void;
 }
 

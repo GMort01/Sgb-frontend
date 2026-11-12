@@ -13,7 +13,8 @@ export function RequireRole({ roles, children }: { roles: Rol[]; children: React
     return <main className="p-8 text-center text-slate-500">Verificando sesión...</main>;
   }
   if (!usuario) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    const loginPath = roles.includes('Bibliotecario') ? '/login/bibliotecario' : '/login/comunidad';
+    return <Navigate to={loginPath} replace state={{ from: location.pathname }} />;
   }
   if (!roles.includes(usuario.rol)) {
     return <Navigate to={usuario.rol === 'Bibliotecario' ? '/bibliotecario' : '/estudiante'} replace />;

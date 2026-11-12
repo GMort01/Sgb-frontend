@@ -206,6 +206,20 @@ Las respuestas correctas de lectura siguen el formato `{ "success": true, "data"
 - Docker y Docker Compose para ejecutar el sistema completo.
 - Node.js 22 o superior y npm si se ejecutan los servicios directamente en el equipo.
 
+## Despliegue del frontend en Vercel
+
+Conecta el repositorio `Sgb-Frontend` a Vercel. La configuración [`vercel.json`](./vercel.json) define el comando de compilación, la carpeta `dist` y la navegación de la aplicación.
+
+Configura esta variable de entorno en Vercel para Production (y Preview solo si quieres habilitar esos despliegues):
+
+| Variable | Valor |
+|---|---|
+| `VITE_API_BASE_URL` | URL pública del backend Render terminada en `/api`, por ejemplo `https://tu-api.onrender.com/api`. |
+
+El dominio de Vercel también debe estar listado en `CORS_ORIGINS` en Render. Si el dominio todavía no existe, despliega primero, copia el dominio asignado, actualiza Render y vuelve a desplegar. Esta variable `VITE_` es pública: contiene solo la dirección de la API. **Nunca** incluyas `DATABASE_URL`, secretos JWT, contraseñas ni claves de Supabase en Vercel.
+
+Para verificar la publicación, abre el dominio de Vercel y confirma la navegación y el inicio de sesión; luego consulta `https://tu-api.onrender.com/health`, que debe responder `{"status":"ok"}`. Comprueba también un inicio de sesión, catálogo y una operación autenticada. Los orígenes no incluidos en `CORS_ORIGINS` no podrán llamar a la API desde el navegador.
+
 ## Ejecución con Docker Compose
 
 Clona los dos repositorios dentro de la carpeta contenedora para que queden como directorios hermanos:

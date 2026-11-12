@@ -114,6 +114,10 @@ export const MultasPage = () => {
         <p className="mt-2 text-slate-500">Registra cargos y lleva el seguimiento de pagos pendientes.</p>
       </header>
 
+      <div role="note" className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-800">
+        No hay cobro en línea conectado. Registra el pago recibido únicamente después de confirmarlo fuera de esta plataforma.
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <article className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5">
           <span className="rounded-xl bg-amber-50 p-3 text-amber-700 ring-1 ring-inset ring-amber-200">
@@ -211,7 +215,7 @@ export const MultasPage = () => {
                               className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-wait disabled:opacity-50"
                             >
                               <Check size={14} aria-hidden="true" />
-                              {accionId === multa.id ? 'Actualizando...' : 'Marcar pagada'}
+                              {accionId === multa.id ? 'Actualizando...' : 'Confirmar pago recibido'}
                             </button>
                           ) : <span className="text-xs text-slate-500">Sin acciones</span>}
                         </td>
@@ -257,10 +261,10 @@ export const MultasPage = () => {
                   type="number"
                   min="1"
                   max="100000000"
-                  step="100"
+                  step="1"
                   value={monto}
                   onChange={(event) => setMonto(event.target.value)}
-                  placeholder="0"
+                  placeholder="5000"
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-sky-600"
                 />
               </label>

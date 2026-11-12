@@ -1,13 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
 import { isAxiosError } from 'axios';
-import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, Check, MapPin, Search, X } from 'lucide-react';
+import {
+  ArrowRight,
+  BookOpen,
+  CalendarDays,
+  Check,
+  CircleDollarSign,
+  LayoutDashboard,
+  LogOut,
+  MapPin,
+  Search,
+  X,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { actividadService } from '../services/actividadService';
+import { multaService } from '../services/multaService';
 import { prestamoService } from '../services/prestamoService';
 import { recursoService } from '../services/recursoService';
 import { useAuth } from '../auth/useAuth';
 import { ThemeToggle } from '../components/ThemeToggle';
-import type { Actividad, Prestamo, Recurso, Reserva } from '../types';
+import type { Actividad, Multa, Prestamo, Recurso, Reserva } from '../types';
 
 const colecciones: Array<Recurso['coleccion']> = [
   'General',
@@ -16,6 +28,16 @@ const colecciones: Array<Recurso['coleccion']> = [
   'Hemeroteca',
   'Mapoteca',
   'Tecnoteca',
+];
+
+type SeccionComunidad = 'inicio' | 'catalogo' | 'servicios' | 'multas' | 'actividades';
+
+const secciones: Array<{ id: SeccionComunidad; etiqueta: string; icono: typeof LayoutDashboard }> = [
+  { id: 'inicio', etiqueta: 'Inicio', icono: LayoutDashboard },
+  { id: 'catalogo', etiqueta: 'Catálogo', icono: BookOpen },
+  { id: 'servicios', etiqueta: 'Préstamos y reservas', icono: Check },
+  { id: 'multas', etiqueta: 'Multas', icono: CircleDollarSign },
+  { id: 'actividades', etiqueta: 'Actividades', icono: CalendarDays },
 ];
 
 const estadoStyles: Record<NonNullable<Recurso['estado']>, string> = {
@@ -33,11 +55,31 @@ function formatDate(value: string) {
     : new Intl.DateTimeFormat('es', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
 }
 
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat('es-CO', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'America/Bogota',
+    }).format(date);
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
 export const EstudiantePage = () => {
   const { usuario, cerrarSesion } = useAuth();
   const [recursos, setRecursos] = useState<Recurso[]>([]);
   const [prestamos, setPrestamos] = useState<Prestamo[]>([]);
   const [reservas, setReservas] = useState<Reserva[]>([]);
+  const [multas, setMultas] = useState<Multa[]>([]);
   const [actividades, setActividades] = useState<Actividad[]>([]);
   const [busqueda, setBusqueda] = useState('');
   const [coleccion, setColeccion] = useState('Todas');
@@ -46,6 +88,7 @@ export const EstudiantePage = () => {
   const [accion, setAccion] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
+  const [seccionActiva, setSeccionActiva] = useState<SeccionComunidad>('inicio');
   const estudianteId = usuario?.id ?? null;
 
   useEffect(() => {
@@ -72,12 +115,14 @@ export const EstudiantePage = () => {
     Promise.all([
       prestamoService.obtenerTodos(),
       prestamoService.obtenerReservas(),
-    actividadService.obtenerTodas(),
+      multaService.obtenerTodas(),
+      actividadService.obtenerTodas(),
     ])
-      .then(([todosPrestamos, todasReservas, listaActividades]) => {
+      .then(([todosPrestamos, todasReservas, todasMultas, listaActividades]) => {
         if (!activo) return;
-      setPrestamos(todosPrestamos.filter((item) => item.estado === 'Activo'));
-      setReservas(todasReservas);
+        setPrestamos(todosPrestamos.filter((item) => item.estado === 'Activo'));
+        setReservas(todasReservas);
+        setMultas(todasMultas);
         setActividades(listaActividades);
       })
       .catch(() => {
@@ -101,15 +146,17 @@ export const EstudiantePage = () => {
 
   const recargarServicios = async () => {
     if (estudianteId === null) return;
-    const [listaRecursos, todosPrestamos, todasReservas, listaActividades] = await Promise.all([
+    const [listaRecursos, todosPrestamos, todasReservas, todasMultas, listaActividades] = await Promise.all([
       recursoService.obtenerTodos(),
       prestamoService.obtenerTodos(),
       prestamoService.obtenerReservas(),
+      multaService.obtenerTodas(),
       actividadService.obtenerTodas(),
     ]);
     setRecursos(listaRecursos);
     setPrestamos(todosPrestamos.filter((item) => item.estado === 'Activo'));
     setReservas(todasReservas);
+    setMultas(todasMultas);
     setActividades(listaActividades);
   };
 
@@ -119,17 +166,20 @@ export const EstudiantePage = () => {
     setError(null);
     setMensaje(null);
     try {
-      if ((recurso.ejemplares ?? 0) > 0) {
-        setMensaje('El préstamo debe ser registrado por un bibliotecario. Acércate al mostrador.');
-        return;
-      }
       if (recurso.coleccion === 'Mapoteca') {
         setMensaje('El material de Mapoteca se presta por USB en modalidad de lectura. Acércate al mostrador.');
         return;
       }
+      if (recurso.coleccion !== 'General'
+        && (recurso.ejemplares ?? 0) > 0) {
+        setMensaje('El préstamo debe ser registrado por un bibliotecario. Acércate al mostrador.');
+        return;
+      }
       const resultado = await prestamoService.reservar(recurso.id);
       await recargarServicios();
-      setMensaje(`No quedan ejemplares de “${recurso.titulo}”. Quedaste en la posición ${resultado.posicion} de la lista de espera.`);
+      setMensaje(resultado.estado === 'Apartada'
+        ? `“${recurso.titulo}” quedó apartado a tu nombre. Recógelo en la biblioteca antes del ${resultado.venceEn ? formatDateTime(resultado.venceEn) : 'vencimiento del plazo de 48 horas'}. El préstamo se registra cuando el bibliotecario te entregue el ejemplar.`
+        : `“${recurso.titulo}” no tiene ejemplares disponibles. Quedaste en la posición ${resultado.posicion} de la lista de espera.`);
     } catch (requestError) {
       setError(isAxiosError(requestError) && typeof requestError.response?.data?.message === 'string'
         ? requestError.response.data.message
@@ -186,53 +236,197 @@ export const EstudiantePage = () => {
     }
   };
 
+  const simularPagoMulta = async (multa: Multa) => {
+    const confirmado = window.confirm(
+      'Este es un pago de demostración: no se realizará ningún cobro real. ¿Deseas marcar esta multa como pagada?',
+    );
+    if (!confirmado) return;
+    setAccion(`multa-${multa.id}`);
+    setError(null);
+    setMensaje(null);
+    try {
+      const multaPagada = await multaService.marcarPagada(multa.id);
+      setMultas((actuales) => actuales.map((item) => item.id === multa.id ? multaPagada : item));
+      setMensaje('Pago de demostración registrado. No se realizó ningún cobro real.');
+    } catch (requestError) {
+      setError(isAxiosError(requestError) && typeof requestError.response?.data?.message === 'string'
+        ? requestError.response.data.message
+        : 'No se pudo registrar el pago de demostración. Actualiza la página e inténtalo de nuevo.');
+    } finally {
+      setAccion(null);
+    }
+  };
+
+  const cambiarSeccion = (seccion: SeccionComunidad) => {
+    setSeccionActiva(seccion);
+    setError(null);
+    setMensaje(null);
+  };
+
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-800">
-      <header className="border-b border-slate-200 bg-slate-50/95">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-4 sm:px-8">
-          <Link to="/" className="flex items-center gap-3 text-sm font-semibold text-slate-800 transition hover:text-sky-700">
-            <ArrowLeft size={17} aria-hidden="true" />
-            SGB Unimadeira
-          </Link>
-          <div className="flex items-center gap-3 text-xs">
-            <span className="text-slate-600">{usuario?.nombres} {usuario?.apellidos} · {usuario?.rol}</span>
-            <ThemeToggle />
-            <button type="button" onClick={cerrarSesion} className="font-semibold text-sky-700">Cerrar sesión</button>
+    <main className="min-h-screen bg-slate-50 text-slate-800 md:flex">
+      <aside className="flex flex-col border-b border-slate-200 bg-white md:min-h-screen md:w-72 md:shrink-0 md:border-b-0 md:border-r">
+        <div className="flex items-center gap-3 px-5 py-5 md:px-6">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#173b35] text-[#e4c990]">
+            <BookOpen size={23} aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-sm font-bold uppercase tracking-[0.12em] text-[#173b35]">Unimadeira</p>
+            <p className="mt-0.5 text-xs text-slate-500">Biblioteca universitaria</p>
           </div>
         </div>
-      </header>
 
-      <div className="mx-auto max-w-7xl space-y-12 px-5 py-10 sm:px-8 sm:py-14">
-        <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-100 via-white to-cyan-100/50 p-7 sm:p-10 lg:p-12">
-          <div className="absolute -right-12 -top-16 h-72 w-72 rounded-full bg-sky-100 blur-3xl" aria-hidden="true" />
-          <div className="relative max-w-2xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-700">Portal de la comunidad</p>
-            <h1 className="mt-3 text-3xl font-bold leading-tight text-slate-800 sm:text-5xl">
-              Hola{usuario ? `, ${usuario.nombres}` : ''}. Encuentra tu próxima lectura.
-            </h1>
-            <p className="mt-4 max-w-xl leading-relaxed text-slate-500">
-              Busca recursos, consulta tus préstamos y reserva títulos sin ejemplares.
-            </p>
-            <a href="#catalogo" className="mt-7 inline-flex items-center gap-2 rounded-xl bg-sky-700 px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-sky-600">
-              Buscar en el catálogo <ArrowRight size={16} aria-hidden="true" />
-            </a>
+        <div className="mx-5 mb-4 rounded-lg bg-[#f5f6f3] px-3 py-3 md:mx-4">
+          <p className="text-xs font-medium text-slate-500">Cuenta institucional</p>
+          <p className="mt-1 truncate text-sm font-semibold text-slate-800">{usuario?.nombres} {usuario?.apellidos}</p>
+          <p className="mt-0.5 text-xs text-[#826a3f]">{usuario?.rol} · {usuario?.codigo}</p>
+        </div>
+
+        <nav aria-label="Navegación principal" className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-1 md:flex-col md:overflow-visible md:px-3 md:py-2">
+          {secciones.map(({ id, etiqueta, icono: Icono }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => cambiarSeccion(id)}
+              aria-current={seccionActiva === id ? 'page' : undefined}
+              className={`flex shrink-0 items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition ${
+                seccionActiva === id
+                  ? 'bg-[#edf2ef] text-[#173b35]'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-[#173b35]'
+              }`}
+            >
+              <Icono size={18} aria-hidden="true" />
+              {etiqueta}
+              {id === 'servicios' && (prestamos.length + reservas.length) > 0 && (
+                <span className="ml-auto rounded-full bg-white px-2 py-0.5 text-xs text-slate-600">{prestamos.length + reservas.length}</span>
+              )}
+              {id === 'actividades' && actividades.length > 0 && (
+                <span className="ml-auto rounded-full bg-white px-2 py-0.5 text-xs text-slate-600">{actividades.length}</span>
+              )}
+              {id === 'multas' && multas.filter((multa) => multa.estado === 'Pendiente').length > 0 && (
+                <span className="ml-auto rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                  {multas.filter((multa) => multa.estado === 'Pendiente').length}
+                </span>
+              )}
+            </button>
+          ))}
+        </nav>
+
+        <div className="hidden border-t border-slate-100 p-4 md:block">
+          <Link to="/" className="mb-3 block px-3 text-xs font-medium text-slate-500 transition hover:text-[#173b35]">
+            Ir al portal institucional
+          </Link>
+          <button type="button" onClick={cerrarSesion} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-[#173b35]">
+            <LogOut size={17} aria-hidden="true" />Cerrar sesión
+          </button>
+          <p className="mt-4 px-3 text-[11px] leading-5 text-slate-400">Universidad de Madeira</p>
+        </div>
+        <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 md:hidden">
+          <Link to="/" className="text-xs font-medium text-slate-500">Portal institucional</Link>
+          <button type="button" onClick={cerrarSesion} className="flex items-center gap-1.5 text-xs font-semibold text-[#173b35]">
+            <LogOut size={15} aria-hidden="true" />Cerrar sesión
+          </button>
+        </div>
+      </aside>
+
+      <div className="min-w-0 flex-1">
+        <header className="border-b border-slate-200 bg-white/80">
+          <div className="flex items-center justify-between gap-4 px-5 py-4 sm:px-8">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#826a3f]">Espacio académico</p>
+              <h1 className="mt-1 text-lg font-semibold text-slate-800">
+                {secciones.find((seccion) => seccion.id === seccionActiva)?.etiqueta}
+              </h1>
+            </div>
+            <ThemeToggle />
           </div>
-        </section>
+        </header>
 
-        {error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</div>}
-        {mensaje && (
-          <div role="status" className="flex items-start justify-between gap-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-            <span>{mensaje}</span>
-            <button type="button" onClick={() => setMensaje(null)} aria-label="Cerrar notificación" className="text-emerald-700 hover:text-slate-800"><X size={17} /></button>
-          </div>
-        )}
+        <div className="mx-auto max-w-7xl space-y-7 p-5 sm:p-8 lg:p-10">
+          {error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</div>}
+          {mensaje && (
+            <div role="status" className="flex items-start justify-between gap-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              <span>{mensaje}</span>
+              <button type="button" onClick={() => setMensaje(null)} aria-label="Cerrar notificación" className="text-emerald-700 hover:text-slate-800"><X size={17} /></button>
+            </div>
+          )}
 
-        <section id="catalogo" className="scroll-mt-8 space-y-6">
+          {seccionActiva === 'inicio' && (
+            <section className="space-y-7">
+              <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-100 via-white to-cyan-100/50 p-7 sm:p-9">
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-sky-700">Biblioteca Unimadeira</p>
+                <h2 className="mt-3 max-w-2xl text-3xl font-bold leading-tight text-slate-800 sm:text-4xl">
+                  Hola{usuario ? `, ${usuario.nombres}` : ''}. ¿Qué necesitas hoy?
+                </h2>
+                <p className="mt-3 max-w-2xl leading-relaxed text-slate-500">
+                  Encuentra recursos, revisa tus servicios activos y descubre actividades de la comunidad universitaria.
+                </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                {[
+                  { etiqueta: 'Préstamos activos', valor: prestamos.length, destino: 'servicios' as const },
+                  { etiqueta: 'Apartados y reservas', valor: reservas.length, destino: 'servicios' as const },
+                  { etiqueta: 'Multas pendientes', valor: multas.filter((multa) => multa.estado === 'Pendiente').length, destino: 'multas' as const },
+                  { etiqueta: 'Próximas actividades', valor: actividades.length, destino: 'actividades' as const },
+                ].map((indicador) => (
+                  <button
+                    key={indicador.etiqueta}
+                    type="button"
+                    onClick={() => cambiarSeccion(indicador.destino)}
+                    className="rounded-xl border border-slate-200 bg-white p-5 text-left transition hover:border-sky-300 hover:bg-slate-50"
+                  >
+                    <span className="text-sm text-slate-500">{indicador.etiqueta}</span>
+                    <span className="mt-2 block text-3xl font-semibold text-slate-800">{cargandoServicios ? '—' : indicador.valor}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={() => cambiarSeccion('catalogo')}
+                  className="group flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5 text-left transition hover:border-sky-300"
+                >
+                  <span>
+                    <span className="block font-semibold text-slate-800">Explorar el catálogo</span>
+                    <span className="mt-1 block text-sm text-slate-500">Busca por título, autor o colección.</span>
+                  </span>
+                  <ArrowRight size={19} className="text-slate-400 transition group-hover:translate-x-1 group-hover:text-sky-700" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => cambiarSeccion('servicios')}
+                  className="group flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5 text-left transition hover:border-sky-300"
+                >
+                  <span>
+                    <span className="block font-semibold text-slate-800">Consultar mis servicios</span>
+                    <span className="mt-1 block text-sm text-slate-500">Revisa préstamos activos y reservas.</span>
+                  </span>
+                  <ArrowRight size={19} className="text-slate-400 transition group-hover:translate-x-1 group-hover:text-sky-700" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => cambiarSeccion('actividades')}
+                  className="group flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5 text-left transition hover:border-sky-300"
+                >
+                  <span>
+                    <span className="block font-semibold text-slate-800">Ver actividades académicas</span>
+                    <span className="mt-1 block text-sm text-slate-500">Consulta fechas, lugares y cupos disponibles.</span>
+                  </span>
+                  <ArrowRight size={19} className="text-slate-400 transition group-hover:translate-x-1 group-hover:text-sky-700" aria-hidden="true" />
+                </button>
+              </div>
+            </section>
+          )}
+
+          {seccionActiva === 'catalogo' && (
+            <section id="catalogo" className="space-y-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.16em] text-sky-700">Colección bibliográfica</p>
               <h2 className="mt-1 text-2xl font-bold text-slate-800">Explora y solicita recursos</h2>
-              <p className="mt-1 text-sm text-slate-500">Los préstamos duran 14 días. Si no hay ejemplares, entrarás a la cola de reservas.</p>
+              <p className="mt-1 text-sm text-slate-500">Aparta ejemplares disponibles de Colección General para recogerlos en 48 horas; otros préstamos se registran en el mostrador.</p>
             </div>
             {!cargandoCatalogo && <span className="text-sm text-slate-500">{resultados.length} {resultados.length === 1 ? 'recurso' : 'recursos'}</span>}
           </div>
@@ -275,6 +469,8 @@ export const EstudiantePage = () => {
                 const yaSolicitado = prestamos.some((item) => item.recursoId === recurso.id)
                   || reservas.some((item) => item.recursoId === recurso.id);
                 const tieneStock = (recurso.ejemplares ?? 0) > 0;
+                const admiteListaEspera = recurso.coleccion === 'General'
+                  || (recurso.coleccion === 'Tecnoteca' && recurso.tipoEquipo === 'Tableta');
                 return (
                   <article key={recurso.id ?? recurso.titulo} className="flex min-h-56 flex-col rounded-2xl border border-slate-200 bg-slate-50/90 p-5 transition hover:border-sky-300 hover:bg-slate-50">
                     <div className="flex items-start justify-between gap-3">
@@ -295,10 +491,16 @@ export const EstudiantePage = () => {
                       <button
                         type="button"
                         onClick={() => void solicitarRecurso(recurso)}
-                        disabled={estudianteId === null || accion !== null || yaSolicitado || ['Perdido', 'Baja'].includes(estado)}
+                        disabled={estudianteId === null || accion !== null || yaSolicitado
+                          || ['Perdido', 'Baja'].includes(estado)
+                          || (recurso.coleccion !== 'Mapoteca' && !tieneStock && !admiteListaEspera)}
                         className="rounded-lg bg-sky-700 px-3 py-2 text-xs font-semibold text-slate-800 transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
                       >
-                        {accion === `recurso-${recurso.id}` ? 'Procesando...' : yaSolicitado ? 'Ya solicitado' : recurso.coleccion === 'Mapoteca' ? 'Consultar en mostrador' : tieneStock ? 'Préstamo en mostrador' : 'Reservar'}
+                        {accion === `recurso-${recurso.id}` ? 'Procesando...' : yaSolicitado ? 'Ya solicitado'
+                          : recurso.coleccion === 'Mapoteca' ? 'Consultar en mostrador'
+                            : recurso.coleccion === 'General' && tieneStock ? 'Apartar para recoger'
+                              : recurso.coleccion === 'General' || admiteListaEspera ? 'Lista de espera'
+                                : tieneStock ? 'Solicitar en mostrador' : 'No disponible'}
                       </button>
                     </div>
                   </article>
@@ -306,9 +508,11 @@ export const EstudiantePage = () => {
               })}
             </div>
           )}
-        </section>
+            </section>
+          )}
 
-        <section className="space-y-5">
+          {seccionActiva === 'servicios' && (
+            <section className="space-y-5">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-sky-700">Tu actividad</p>
             <h2 className="mt-1 text-2xl font-bold text-slate-800">Mis préstamos y reservas</h2>
@@ -326,7 +530,7 @@ export const EstudiantePage = () => {
                   <span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs text-sky-700">{prestamos.length}</span>
                 </div>
                 {prestamos.length === 0 ? (
-                  <p className="mt-5 text-sm text-slate-500">Aún no tienes préstamos activos. Solicita un ejemplar en el catálogo.</p>
+                  <p className="mt-5 text-sm text-slate-500">Aún no tienes préstamos activos. Aparta un libro de Colección General o solicita otros materiales en el mostrador.</p>
                 ) : (
                   <div className="mt-4 space-y-3">
                     {prestamos.map((prestamo) => (
@@ -350,14 +554,18 @@ export const EstudiantePage = () => {
                   <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs text-amber-700">{reservas.length}</span>
                 </div>
                 {reservas.length === 0 ? (
-                  <p className="mt-5 text-sm text-slate-500">Cuando solicites un título sin ejemplares, aparecerá aquí tu lugar en la cola.</p>
+                  <p className="mt-5 text-sm text-slate-500">Tus apartados para recoger y las posiciones en lista de espera aparecerán aquí.</p>
                 ) : (
                   <div className="mt-4 space-y-3">
                     {reservas.map((reserva) => (
                       <div key={reserva.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/80 p-3">
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium text-slate-700">{reserva.codigoRecurso}</p>
-                          <p className="mt-1 text-xs text-slate-500">Posición {reserva.posicion} · {formatDate(reserva.fechaReserva)}</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {reserva.estado === 'Apartada'
+                              ? `Apartado · recoger antes del ${reserva.venceEn ? formatDateTime(reserva.venceEn) : 'plazo de 48 horas'}`
+                              : `Lista de espera · posición ${reserva.posicion} · ${formatDate(reserva.fechaReserva)}`}
+                          </p>
                         </div>
                         <button type="button" onClick={() => void cancelarReserva(reserva)} disabled={accion !== null} className="shrink-0 rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-40">
                           {accion === `reserva-${reserva.id}` ? '...' : 'Cancelar'}
@@ -369,9 +577,86 @@ export const EstudiantePage = () => {
               </article>
             </div>
           )}
-        </section>
+            </section>
+          )}
 
-        <section className="space-y-5">
+          {seccionActiva === 'multas' && (
+            <section className="space-y-5">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-sky-700">Estado de cuenta</p>
+                <h2 className="mt-1 text-2xl font-bold text-slate-800">Mis multas</h2>
+                <p className="mt-1 text-sm text-slate-500">Consulta los cargos asociados a tu cuenta institucional.</p>
+              </div>
+              {cargandoServicios ? (
+                <div className="h-40 animate-pulse rounded-xl bg-slate-100" aria-label="Cargando multas" />
+              ) : multas.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-white p-10 text-center">
+                  <CircleDollarSign className="mx-auto mb-3 text-slate-400" size={30} aria-hidden="true" />
+                  <h3 className="font-semibold text-slate-800">No tienes multas registradas</h3>
+                  <p className="mt-2 text-sm text-slate-500">Si se registra un cargo en tu cuenta, aparecerá aquí.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4">
+                    <div>
+                      <h3 className="font-semibold text-slate-800">Resumen de cuenta</h3>
+                      <p className="mt-1 text-sm text-slate-500">{multas.length} {multas.length === 1 ? 'cargo registrado' : 'cargos registrados'}</p>
+                    </div>
+                    <span className="rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700">
+                      Pendiente: {formatCurrency(multas.filter((multa) => multa.estado === 'Pendiente').reduce((total, multa) => total + multa.monto, 0))}
+                    </span>
+                  </div>
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    {multas.map((multa) => (
+                      <article key={multa.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                        <div className={`h-1 ${multa.estado === 'Pendiente' ? 'bg-amber-400' : 'bg-emerald-500'}`} aria-hidden="true" />
+                        <div className="space-y-4 p-5">
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Multa bibliotecaria</p>
+                              <p className="mt-2 text-sm font-medium leading-6 text-slate-800">{multa.concepto}</p>
+                            </div>
+                            <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                              multa.estado === 'Pendiente'
+                                ? 'bg-amber-50 text-amber-700'
+                                : 'bg-emerald-50 text-emerald-700'
+                            }`}>
+                              {multa.estado}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-end justify-between gap-4 border-t border-slate-100 pt-4">
+                            <div>
+                              <p className="text-xs text-slate-500">Fecha de registro · {formatDate(multa.fecha)}</p>
+                              <p className="mt-1 text-xl font-bold text-slate-800">{formatCurrency(multa.monto)}</p>
+                            </div>
+                            {multa.estado === 'Pendiente' && (
+                              <button
+                                type="button"
+                                onClick={() => void simularPagoMulta(multa)}
+                                disabled={accion !== null}
+                                className="inline-flex items-center gap-2 rounded-lg bg-[#173b35] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#245449] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#173b35] disabled:cursor-wait disabled:opacity-50"
+                              >
+                                <CircleDollarSign size={16} aria-hidden="true" />
+                                {accion === `multa-${multa.id}` ? 'Procesando...' : 'Pagar'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                  {multas.some((multa) => multa.estado === 'Pendiente') && (
+                    <p className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-xs leading-5 text-sky-800">
+                      El botón «Pagar» es una simulación para esta versión; no se realizará ningún cobro real.
+                    </p>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+
+          {seccionActiva === 'actividades' && (
+            <section className="space-y-5">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-sky-700">Vida universitaria</p>
             <h2 className="mt-1 text-2xl font-bold text-slate-800">Horarios y actividades</h2>
@@ -414,13 +699,13 @@ export const EstudiantePage = () => {
               })}
             </div>
           )}
-        </section>
+            </section>
+          )}
 
-        <footer className="border-t border-slate-200 pt-6 text-center text-xs text-slate-500">
-          <Link to="/" className="transition hover:text-slate-700">Volver al portal</Link>
-          <span className="mx-2">·</span>
-          Tus datos y acciones están asociados a tu cuenta.
-        </footer>
+          <footer className="border-t border-slate-200 pt-6 text-center text-xs text-slate-500">
+            Tus datos y acciones están asociados a tu cuenta.
+          </footer>
+        </div>
       </div>
     </main>
   );

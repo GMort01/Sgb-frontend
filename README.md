@@ -166,9 +166,9 @@ El diagrama representa los componentes y flujos implementados en este proyecto; 
 
 - Consultar y registrar recursos bibliográficos.
 - Consultar estudiantes y usuarios; registrar usuarios.
-- Solicitar préstamos; cuando no hay ejemplares, entrar en cola de reserva.
-- Renovar o devolver préstamos; al devolver, asignar el ejemplar a una reserva pendiente cuando corresponde.
-- Consultar y cancelar reservas.
+- Apartar en línea ejemplares disponibles de Colección General durante 48 horas para recogerlos físicamente en la biblioteca; sin stock, entrar en lista de espera.
+- Renovar o devolver préstamos; al devolver, ofrecer el ejemplar a la primera persona en espera mediante un apartado de 48 horas.
+- Consultar y cancelar apartados y reservas en lista de espera; los apartados vencidos liberan el ejemplar automáticamente.
 - Registrar multas y marcarlas como pagadas.
 - Publicar actividades e inscribir usuarios respetando los cupos.
 - Consultar la información desde el portal de estudiante y desde el espacio bibliotecario.
@@ -186,10 +186,11 @@ La dirección local del backend es `http://localhost:3000`.
 | `POST` | `/api/usuarios` | Registrar un usuario |
 | `GET` | `/api/prestamos` | Consultar préstamos activos |
 | `GET` | `/api/prestamos/todos` | Consultar todos los préstamos |
-| `POST` | `/api/prestamos` | Solicitar un préstamo o crear una reserva si no hay ejemplares |
+| `POST` | `/api/prestamos` | Registrar el préstamo físico al entregar el ejemplar (Bibliotecario) |
 | `PATCH` | `/api/prestamos/:id/renovar` | Renovar un préstamo |
 | `PATCH` | `/api/prestamos/:id/devolver` | Devolver un préstamo |
-| `GET` | `/api/reservas` | Consultar la cola de reservas |
+| `GET` | `/api/reservas` | Consultar apartados para recoger y posiciones en la lista de espera |
+| `POST` | `/api/reservas` | Apartar un ejemplar disponible de General o entrar en lista de espera |
 | `DELETE` | `/api/reservas/:id` | Cancelar una reserva |
 | `GET` | `/api/multas` | Consultar multas |
 | `POST` | `/api/multas` | Registrar una multa |

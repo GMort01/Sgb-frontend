@@ -34,8 +34,16 @@ export const prestamoService = {
     const response = await api.post<ApiResponse<{ tipo: 'reserva'; data: Reserva }>>('/reservas', { recursoId });
     return response.data.data.data;
   },
-  devolver: async (id: number): Promise<{ prestamo: Prestamo; promovido: Prestamo | null }> => {
-    const response = await api.patch<ApiResponse<{ prestamo: Prestamo; promovido: Prestamo | null }>>(`/prestamos/${id}/devolver`);
+  devolver: async (id: number): Promise<{
+    prestamo: Prestamo;
+    promovido: Prestamo | null;
+    reservaPromovida: Reserva | null;
+  }> => {
+    const response = await api.patch<ApiResponse<{
+      prestamo: Prestamo;
+      promovido: Prestamo | null;
+      reservaPromovida: Reserva | null;
+    }>>(`/prestamos/${id}/devolver`);
     return response.data.data;
   },
 };

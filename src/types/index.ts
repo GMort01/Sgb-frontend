@@ -55,6 +55,8 @@ export interface Reserva {
   codigoRecurso: string;
   fechaReserva: string;
   posicion: number;
+  estado: 'Espera' | 'Apartada';
+  venceEn: string | null;
   usuarioId?: number;
   recursoId?: number;
 }

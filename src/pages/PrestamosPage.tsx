@@ -15,6 +15,17 @@ function formatearFecha(fecha: string) {
   return fecha.includes('21:00') ? `${formatted} · 21:00` : formatted;
 }
 
+function formatearFechaHora(fecha: string) {
+  const parsed = new Date(fecha);
+  return Number.isNaN(parsed.getTime())
+    ? fecha
+    : new Intl.DateTimeFormat('es-CO', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'America/Bogota',
+    }).format(parsed);
+}
+
 export const PrestamosPage = () => {
   const [pestana, setPestana] = useState<Pestana>('activos');
   const [prestamos, setPrestamos] = useState<Prestamo[]>([]);
@@ -27,6 +38,7 @@ export const PrestamosPage = () => {
   const [cargando, setCargando] = useState(true);
   const [accionId, setAccionId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mensaje, setMensaje] = useState<string | null>(null);
 
   useEffect(() => {
     let activo = true;
@@ -62,6 +74,7 @@ export const PrestamosPage = () => {
     event.preventDefault();
     setRegistrando(true);
     setError(null);
+    setMensaje(null);
     try {
       const resultado = await prestamoService.solicitar(Number(usuarioId), Number(recursoId));
       const [activos, cola] = await Promise.all([
@@ -71,7 +84,7 @@ export const PrestamosPage = () => {
       setPrestamos(activos);
       setReservas(cola);
       setRecursos(await recursoService.obtenerTodos());
-      setError(resultado.tipo === 'prestamo'
+      setMensaje(resultado.tipo === 'prestamo'
         ? `Préstamo registrado. Devolución prevista: ${formatearFecha(resultado.data.fechaDevolucion)}.`
         : `Sin ejemplares disponibles. Se creó una reserva en la posición ${resultado.data.posicion}.`);
     } catch {
@@ -84,6 +97,7 @@ export const PrestamosPage = () => {
   const renovar = async (prestamo: Prestamo) => {
     setAccionId(prestamo.id);
     setError(null);
+    setMensaje(null);
     try {
       const actualizado = await prestamoService.renovar(prestamo.id);
       setPrestamos((actuales) => actuales.map((item) => item.id === actualizado.id ? actualizado : item));
@@ -97,6 +111,7 @@ export const PrestamosPage = () => {
   const devolver = async (prestamo: Prestamo) => {
     setAccionId(prestamo.id);
     setError(null);
+    setMensaje(null);
     try {
       const resultado = await prestamoService.devolver(prestamo.id);
       const [activos, cola] = await Promise.all([
@@ -105,8 +120,12 @@ export const PrestamosPage = () => {
       ]);
       setPrestamos(activos);
       setReservas(cola);
-      if (resultado.promovido) {
-        setError(`${resultado.promovido.usuario} recibió el ejemplar desde la cola de reservas.`);
+      if (resultado.reservaPromovida) {
+        setMensaje(`${resultado.reservaPromovida.usuario} tiene ahora un apartado de Colección General para recoger el ejemplar en 48 horas.`);
+      } else if (resultado.promovido) {
+        setMensaje(`${resultado.promovido.usuario} recibió el ejemplar desde la cola de reservas.`);
+      } else {
+        setMensaje('Devolución registrada. El ejemplar está disponible.');
       }
     } catch {
       setError('No se pudo registrar la devolución. Actualiza la página e inténtalo de nuevo.');
@@ -120,7 +139,7 @@ export const PrestamosPage = () => {
       <header>
         <p className="mb-2 text-sm font-semibold uppercase tracking-[0.2em] text-sky-700">Circulación</p>
         <h1 className="text-3xl font-bold tracking-tight text-slate-800 sm:text-4xl">Préstamos y reservas</h1>
-        <p className="mt-2 text-slate-500">Administra los préstamos activos y consulta la cola de espera.</p>
+        <p className="mt-2 text-slate-500">Administra los préstamos activos, apartados y listas de espera.</p>
       </header>
 
       <form onSubmit={registrarPrestamo} className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
@@ -159,12 +178,17 @@ export const PrestamosPage = () => {
           </span>
           <div>
             <p className="text-sm text-slate-500">Personas en espera</p>
-            <p className="mt-1 text-2xl font-bold text-slate-800">{cargando ? '—' : reservas.length}</p>
+            <p className="mt-1 text-2xl font-bold text-slate-800">{cargando ? '—' : reservas.filter((item) => item.estado === 'Espera').length}</p>
           </div>
         </div>
       </div>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/5">
+        {mensaje && (
+          <div role="status" className="mx-4 mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 sm:mx-6">
+            {mensaje}
+          </div>
+        )}
         <div className="border-b border-slate-200 px-4 pt-4 sm:px-6">
           <div className="flex gap-2" role="tablist" aria-label="Secciones de circulación">
             <button
@@ -196,7 +220,7 @@ export const PrestamosPage = () => {
                   : 'border-transparent text-slate-500 hover:text-slate-700'
               }`}
             >
-              Cola de espera / Reservas
+              Lista de espera / Apartados
               <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">{reservas.length}</span>
             </button>
           </div>
@@ -287,25 +311,30 @@ export const PrestamosPage = () => {
             <div className="rounded-xl border border-dashed border-slate-200 px-5 py-14 text-center">
               <ArrowRightLeft className="mx-auto mb-3 text-slate-500" size={32} aria-hidden="true" />
               <h2 className="font-semibold text-slate-800">La cola de espera está vacía</h2>
-              <p className="mt-2 text-sm text-slate-500">Las reservas registradas aparecerán aquí en orden de llegada.</p>
+              <p className="mt-2 text-sm text-slate-500">Los apartados para recoger y las listas de espera aparecerán aquí.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[650px] text-left text-sm">
+              <table className="w-full min-w-[800px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500">
-                    <th scope="col" className="px-4 py-3 font-semibold">Posición</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">Estado / posición</th>
                     <th scope="col" className="px-4 py-3 font-semibold">Usuario</th>
                     <th scope="col" className="px-4 py-3 font-semibold">Código recurso</th>
                     <th scope="col" className="px-4 py-3 font-semibold">Fecha de reserva</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">Recoger antes de</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700/70">
                   {reservas.map((reserva) => (
                     <tr key={reserva.id} className="transition hover:bg-slate-100">
                       <td className="px-4 py-4">
-                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-100 text-xs font-bold text-sky-700">
-                          {reserva.posicion}
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          reserva.estado === 'Apartada'
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : 'bg-amber-50 text-amber-700'
+                        }`}>
+                          {reserva.estado === 'Apartada' ? 'Apartado' : `Espera · ${reserva.posicion}`}
                         </span>
                       </td>
                       <td className="px-4 py-4 font-medium text-slate-700">{reserva.usuario}</td>
@@ -313,6 +342,9 @@ export const PrestamosPage = () => {
                         <span className="rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-xs text-sky-800">{reserva.codigoRecurso}</span>
                       </td>
                       <td className="px-4 py-4 text-slate-500">{formatearFecha(reserva.fechaReserva)}</td>
+                      <td className="px-4 py-4 text-slate-500">
+                        {reserva.estado === 'Apartada' && reserva.venceEn ? formatearFechaHora(reserva.venceEn) : '—'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
